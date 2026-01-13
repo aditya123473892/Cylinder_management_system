@@ -56,12 +56,20 @@ const navigationItems = [
         href: '/masters/cylinders',
       },
       {
+        name: 'Locations',
+        href: '/masters/locations',
+      },
+      {
         name: 'Customers',
         href: '/masters/customers',
       },
       {
-        name: 'Locations',
-        href: '/masters/locations',
+        name: 'Vehicles',
+        href: '/masters/vehicles',
+      },
+      {
+        name: 'Drivers',
+        href: '/masters/drivers',
       },
       {
         name: 'Rate Contracts',
@@ -74,10 +82,6 @@ const navigationItems = [
       {
         name: 'Transporters',
         href: '/masters/transporters',
-      },
-      {
-        name: 'Vehicles',
-        href: '/masters/vehicles',
       },
     ],
   },
@@ -170,7 +174,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto min-h-0">
         {navigationItems.map((item) => {
-          const isActive = pathname === `/admin${item.href}` || (item.href === '/dashboard' && pathname === '/dashboard');
+          const isActive = pathname === item.href;
           const hasChildren = item.children && item.children.length > 0;
           const isExpanded = isItemExpanded(item.name);
           const hasActiveChildItem = hasActiveChild(item);
@@ -249,7 +253,7 @@ export function Sidebar() {
           return (
             <Link
               key={item.name}
-              href={`/admin${item.href}`}
+              href={item.href}
               className={`flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200 group ${
                 isActive
                   ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'

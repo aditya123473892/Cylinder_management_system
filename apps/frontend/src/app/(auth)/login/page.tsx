@@ -2,8 +2,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Truck, Users, BarChart3, Shield, Zap, Globe } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+  const { login, signup, isLoading } = useAuth();
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   
   // Login form state
@@ -40,12 +44,33 @@ export default function LoginPage() {
     setIsLogin(!isLogin);
   };
 
-  const handleSubmit = (e: React.MouseEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLogin) {
-      console.log('Login:', { loginEmail, loginPassword });
-    } else {
-      console.log('Signup:', { companyName, signupName, signupEmail, signupPassword, agreeToTerms });
+    try {
+      await login(loginEmail, loginPassword);
+      router.push('/dashboard');
+    } catch (error) {
+      // Error is handled by the auth context
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agreeToTerms) {
+      alert('Please agree to terms and conditions');
+      return;
+    }
+
+    try {
+      await signup({
+        FullName: signupName,
+        Email: signupEmail,
+        Password: signupPassword,
+        Role: 'USER'
+      });
+      router.push('/dashboard');
+    } catch (error) {
+      // Error is handled by the auth context
     }
   };
 
@@ -244,10 +269,11 @@ export default function LoginPage() {
                     <motion.button
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
-                      onClick={handleSubmit}
-                      className="w-full py-2.5 text-sm bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                      onClick={handleLogin}
+                      disabled={isLoading}
+                      className="w-full py-2.5 text-sm bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
                     >
-                      Sign In
+                      {isLoading ? 'Signing In...' : 'Sign In'}
                     </motion.button>
                   </div>
 
@@ -341,10 +367,11 @@ export default function LoginPage() {
                     <motion.button
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
-                      onClick={handleSubmit}
-                      className="w-full py-2.5 text-sm bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                      onClick={handleSignup}
+                      disabled={isLoading}
+                      className="w-full py-2.5 text-sm bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
                     >
-                      Create Account
+                      {isLoading ? 'Creating Account...' : 'Create Account'}
                     </motion.button>
                   </div>
 
