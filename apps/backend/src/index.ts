@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import { connectDB } from './shared/config/database';
 import cylinderTypeRoutes from './domains/cylinder/routes/cylinderTypeRoutes';
+import locationRoutes from './domains/locations/routes/locationRoutes';
+import customerRoutes from './domains/customer/routes/customerRoutes';
+import vehicleRoutes from './domains/vehicles/routes/vehicleRoutes';
+import driverRoutes from './domains/drivers/routes/driverRoutes';
+import authRoutes from './domains/auth-rbac/routes/authroutes';
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -53,8 +58,23 @@ app.get('/db-test', async (req, res) => {
   }
 });
 
+// Auth routes (public)
+app.use('/api/auth', authRoutes);
+
 // Cylinder type routes
 app.use('/api/cylinder-types', cylinderTypeRoutes);
+
+// Location routes
+app.use('/api/locations', locationRoutes);
+
+// Customer routes
+app.use('/api/customers', customerRoutes);
+
+// Vehicle routes
+app.use('/api/vehicles', vehicleRoutes);
+
+// Driver routes
+app.use('/api/drivers', driverRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
