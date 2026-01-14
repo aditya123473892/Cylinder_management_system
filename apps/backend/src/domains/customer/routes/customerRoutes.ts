@@ -14,8 +14,8 @@ router.get('/:id', AuthMiddleware.authenticate, (req, res) => customerController
 // POST /api/customers - Create new customer (Admin/Manager only)
 router.post('/', AuthMiddleware.authenticate, AuthMiddleware.authorize('ADMIN', 'MANAGER'), (req, res) => customerController.createCustomer(req, res));
 
-// PUT /api/customers/:id - Update customer by ID (Admin/Manager only)
-router.put('/:id', AuthMiddleware.authenticate, AuthMiddleware.authorize('ADMIN', 'MANAGER'), (req, res) => customerController.updateCustomer(req, res));
+// PUT /api/customers/:id - Update customer by ID (Admin/Manager/User for now)
+router.put('/:id', AuthMiddleware.authenticate, AuthMiddleware.authorize('ADMIN', 'MANAGER', 'USER'), (req, res) => customerController.updateCustomer(req, res));
 
 // DELETE /api/customers/:id - Delete customer by ID (Admin only)
 router.delete('/:id', AuthMiddleware.authenticate, AuthMiddleware.authorize('ADMIN'), (req, res) => customerController.deleteCustomer(req, res));

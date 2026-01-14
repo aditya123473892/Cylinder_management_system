@@ -5,7 +5,7 @@ export const dbConfig: sql.config = {
   password: process.env.DB_PASSWORD || 'jqgiF@12345Z',
   server: process.env.DB_SERVER || '103.197.76.251',
   database: process.env.DB_NAME || 'Cylinder-Management',
-  
+
   options: {
     encrypt: false, // Set to true if using Azure
     trustServerCertificate: true, // Set to true for local development
