@@ -37,7 +37,11 @@ export default function CylinderTypesPage() {
     setSubmitting(true);
     try {
       await cylinderTypeApi.createCylinderType(data);
+      toast.success('Cylinder type created successfully');
       await loadCylinderTypes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create cylinder type');
+      console.error('Error creating cylinder type:', error);
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +53,11 @@ export default function CylinderTypesPage() {
     setSubmitting(true);
     try {
       await cylinderTypeApi.updateCylinderType(editingCylinderType.CylinderTypeId, data);
+      toast.success('Cylinder type updated successfully');
       await loadCylinderTypes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update cylinder type');
+      console.error('Error updating cylinder type:', error);
     } finally {
       setSubmitting(false);
     }
@@ -97,8 +105,6 @@ export default function CylinderTypesPage() {
 
   return (
     <div className="p-6">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

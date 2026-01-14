@@ -50,7 +50,11 @@ export default function CustomersPage() {
     setSubmitting(true);
     try {
       await customerApi.createCustomer(data);
+      toast.success('Customer created successfully');
       await loadCustomers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create customer');
+      console.error('Error creating customer:', error);
     } finally {
       setSubmitting(false);
     }
@@ -62,7 +66,11 @@ export default function CustomersPage() {
     setSubmitting(true);
     try {
       await customerApi.updateCustomer(editingCustomer.CustomerId, data);
+      toast.success('Customer updated successfully');
       await loadCustomers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update customer');
+      console.error('Error updating customer:', error);
     } finally {
       setSubmitting(false);
     }
@@ -123,8 +131,6 @@ export default function CustomersPage() {
 
   return (
     <div className="p-6">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Truck, Users, BarChart3, Shield, Zap, Globe } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const { login, signup, isLoading } = useAuth();
@@ -253,18 +254,21 @@ export default function LoginPage() {
                       />
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="mr-1.5 w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
-                        />
-                        <span className="text-xs text-blue-900">Remember me</span>
-                      </label>
-                      <a href="#" className="text-xs font-medium text-blue-600 hover:text-blue-700">
-                        Forgot password?
-                      </a>
-                    </div>
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mr-1.5 w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
+                          />
+                          <span className="text-xs text-blue-900">Remember me</span>
+                        </label>
+                        <button
+                          onClick={() => toast.error('Password reset feature is not yet implemented')}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
 
                     <motion.button
                       whileHover={{ scale: 1.01 }}

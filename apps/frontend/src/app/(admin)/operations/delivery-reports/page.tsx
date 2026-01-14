@@ -160,7 +160,7 @@ export default function DeliveryReportsPage() {
 
           <div className="flex gap-2">
             <button
-              onClick={() => toast.success('Export feature coming soon!')}
+              onClick={() => toast.error('Export feature is not yet implemented')}
               className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               <Download className="w-4 h-4" />

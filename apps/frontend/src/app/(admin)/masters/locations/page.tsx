@@ -37,7 +37,11 @@ export default function LocationsPage() {
     setSubmitting(true);
     try {
       await locationApi.createLocation(data);
+      toast.success('Location created successfully');
       await loadLocations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create location');
+      console.error('Error creating location:', error);
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +53,11 @@ export default function LocationsPage() {
     setSubmitting(true);
     try {
       await locationApi.updateLocation(editingLocation.LocationId, data);
+      toast.success('Location updated successfully');
       await loadLocations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update location');
+      console.error('Error updating location:', error);
     } finally {
       setSubmitting(false);
     }
@@ -100,8 +108,6 @@ export default function LocationsPage() {
 
   return (
     <div className="p-6">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
