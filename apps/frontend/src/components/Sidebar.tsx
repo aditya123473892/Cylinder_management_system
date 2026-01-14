@@ -35,6 +35,16 @@ const navigationItems = [
     name: 'Operations',
     href: '/operations',
     icon: Truck,
+    children: [
+      {
+        name: 'Dispatch Note',
+        href: '/operations/delivery',
+      },
+      {
+        name: 'Delivery Reports',
+        href: '/operations/delivery-reports',
+      },
+    ],
   },
   {
     name: 'Reports',
