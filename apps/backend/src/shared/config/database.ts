@@ -2,7 +2,7 @@ import sql from 'mssql';
 
 export const dbConfig: sql.config = {
   user: process.env.DB_USER || 'sa',
-  password: process.env.DB_PASSWORD || 'jqgiF@12345Z',
+  password: process.env.DB_PASSWORD || 'jqgiF@12345ZPK',
   server: process.env.DB_SERVER || '103.197.76.251',
   database: process.env.DB_NAME || 'Cylinder-Management',
 
