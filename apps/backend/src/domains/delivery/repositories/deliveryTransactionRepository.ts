@@ -10,15 +10,17 @@ export class DeliveryTransactionRepository {
   async findAll(): Promise<DeliveryTransactionWithLines[]> {
     const pool = await this.getPool();
 
-    // Get all transactions with basic info
+    // Get all transactions with basic info including GR status
     const transactions = await pool.request().query(`
       SELECT dt.*, c.CustomerName as customer_name, l.LocationName as location_name,
-             v.vehicle_number, d.driver_name
+             v.vehicle_number, d.driver_name,
+             gr.gr_status, gr.advance_amount as gr_advance_amount
       FROM dbo.DELIVERY_TRANSACTION dt
       INNER JOIN dbo.CUSTOMER_MASTER c ON dt.customer_id = c.CustomerId
       INNER JOIN dbo.LOCATION_MASTER l ON dt.to_location_id = l.LocationId
       LEFT JOIN dbo.VEHICLE_MASTER v ON dt.vehicle_id = v.vehicle_id
       LEFT JOIN dbo.DRIVER_MASTER d ON dt.driver_id = d.driver_id
+      LEFT JOIN dbo.GR_MASTER gr ON dt.delivery_id = gr.delivery_id
       ORDER BY dt.delivery_id DESC
     `);
 
@@ -176,18 +178,26 @@ export class DeliveryTransactionRepository {
         .input('driver_id', sql.Int, data.driver_id)
         .input('selected_rate_contract_id', sql.Int, data.rate_contract_id)
         .input('delivery_datetime', sql.DateTime, new Date(`${data.delivery_date}T${data.delivery_time}:00`))
+        .input('total_delivered_qty', sql.Int, totalDeliveredQty)
+        .input('total_returned_qty', sql.Int, totalReturnedQty)
+        .input('total_net_qty', sql.Int, totalNetQty)
+        .input('total_bill_amount', sql.Decimal(12, 2), totalBillAmount)
         .input('created_by', sql.Int, createdBy)
         .query(`
           INSERT INTO dbo.DELIVERY_TRANSACTION (
             customer_id, customer_type, from_location_id, from_location_name,
             to_location_id, to_location_name, vehicle_id, driver_id,
-            selected_rate_contract_id, delivery_datetime, created_by
+            selected_rate_contract_id, delivery_datetime,
+            total_delivered_qty, total_returned_qty, total_net_qty, total_bill_amount,
+            created_by
           )
           OUTPUT INSERTED.*
           VALUES (
             @customer_id, @customer_type, @from_location_id, @from_location_name,
             @to_location_id, @to_location_name, @vehicle_id, @driver_id,
-            @selected_rate_contract_id, @delivery_datetime, @created_by
+            @selected_rate_contract_id, @delivery_datetime,
+            @total_delivered_qty, @total_returned_qty, @total_net_qty, @total_bill_amount,
+            @created_by
           )
         `);
 

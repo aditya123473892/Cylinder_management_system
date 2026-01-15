@@ -8,6 +8,7 @@ import vehicleRoutes from './domains/vehicles/routes/vehicleRoutes';
 import driverRoutes from './domains/drivers/routes/driverRoutes';
 import rateContractRoutes from './domains/rate-contract/routes/rateContractRoutes';
 import deliveryTransactionRoutes from './domains/delivery/routes/deliveryTransactionRoutes';
+import grRoutes from './domains/gr/routes/grRoutes';
 import authRoutes from './domains/auth-rbac/routes/authroutes';
 
 const app = express();
@@ -83,6 +84,9 @@ app.use('/api/rate-contracts', rateContractRoutes);
 
 // Delivery transaction routes
 app.use('/api/delivery-transactions', deliveryTransactionRoutes);
+
+// GR routes
+app.use('/api/gr', grRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
