@@ -2,17 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Search, Download, Eye, Calendar, Truck, User, MapPin, Package } from 'lucide-react';
+import { FileText, Search, Download, Eye, Calendar, Truck, User, MapPin, Package, Plus, CheckCircle, Clock, FileCheck } from 'lucide-react';
 import { DeliveryTransaction } from '../../../../types/deliveryTransaction';
+import { GrWithDelivery } from '../../../../types/gr';
 import { deliveryTransactionApi } from '../../../../lib/api/deliveryTransactionApi';
+import { grApi } from '../../../../lib/api/grApi';
+import { PDFGenerator } from '../../../../lib/pdfGenerator';
 import toast from 'react-hot-toast';
 
 export default function DeliveryReportsPage() {
   const [transactions, setTransactions] = useState<DeliveryTransaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<DeliveryTransaction[]>([]);
+  const [grs, setGrs] = useState<GrWithDelivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState<DeliveryTransaction | null>(null);
+  const [selectedGr, setSelectedGr] = useState<GrWithDelivery | null>(null);
+  const [showGrModal, setShowGrModal] = useState(false);
+  const [showCreateGrModal, setShowCreateGrModal] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDeliveryTransactions();
@@ -25,10 +34,14 @@ export default function DeliveryReportsPage() {
   const fetchDeliveryTransactions = async () => {
     try {
       setIsLoading(true);
-      const data = await deliveryTransactionApi.getAllDeliveryTransactions();
-      setTransactions(data);
+      const [transactionsData, grsData] = await Promise.all([
+        deliveryTransactionApi.getAllDeliveryTransactions(),
+        grApi.getAllGrs(),
+      ]);
+      setTransactions(transactionsData);
+      setGrs(grsData);
     } catch (error) {
-      console.error('Error fetching delivery transactions:', error);
+      console.error('Error fetching data:', error);
       toast.error('Failed to load delivery transactions');
     } finally {
       setIsLoading(false);
@@ -77,6 +90,91 @@ export default function DeliveryReportsPage() {
   };
 
   const { totalTransactions, totalAmount } = calculateTransactionSummary();
+
+  const getGrForTransaction = (transactionId: number) => {
+    return grs.find(gr => gr.delivery_id === transactionId);
+  };
+
+  const handleCreateGr = async (transaction: DeliveryTransaction) => {
+    setSelectedTransaction(transaction);
+    setAdvanceAmount('0');
+    setShowCreateGrModal(true);
+  };
+
+  const handleViewGr = (gr: GrWithDelivery) => {
+    setSelectedGr(gr);
+    setShowGrModal(true);
+  };
+
+  const handleCreateGrSubmit = async () => {
+    if (!selectedTransaction || !advanceAmount) {
+      toast.error('Please enter advance amount');
+      return;
+    }
+
+    try {
+      setIsActionLoading('create-gr');
+      await grApi.createGr({
+        delivery_id: selectedTransaction.delivery_id,
+        advance_amount: parseFloat(advanceAmount),
+      });
+      toast.success('GR created successfully');
+      setShowCreateGrModal(false);
+      setSelectedTransaction(null);
+      setAdvanceAmount('');
+      fetchDeliveryTransactions();
+    } catch (error) {
+      console.error('Error creating GR:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create GR');
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
+
+  const handleApproveGr = async (grId: number) => {
+    try {
+      setIsActionLoading(`approve-${grId}`);
+      await grApi.approveGr(grId, { advance_amount: selectedGr?.advance_amount });
+      toast.success('GR approved successfully');
+      setShowGrModal(false);
+      fetchDeliveryTransactions();
+    } catch (error) {
+      console.error('Error approving GR:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to approve GR');
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
+
+  const handleFinalizeGr = async (grId: number) => {
+    try {
+      setIsActionLoading(`finalize-${grId}`);
+      await grApi.finalizeGr(grId);
+      toast.success('GR finalized successfully');
+      setShowGrModal(false);
+      fetchDeliveryTransactions();
+    } catch (error) {
+      console.error('Error finalizing GR:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to finalize GR');
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
+
+  const handleCloseTrip = async (grId: number) => {
+    try {
+      setIsActionLoading(`close-${grId}`);
+      await grApi.closeTrip(grId);
+      toast.success('Trip closed successfully');
+      setShowGrModal(false);
+      fetchDeliveryTransactions();
+    } catch (error) {
+      console.error('Error closing trip:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to close trip');
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -159,13 +257,7 @@ export default function DeliveryReportsPage() {
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={() => toast.error('Export feature is not yet implemented')}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export</span>
-            </button>
+        
           </div>
         </div>
       </div>
@@ -199,6 +291,9 @@ export default function DeliveryReportsPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  GR Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date & Time
@@ -269,6 +364,32 @@ export default function DeliveryReportsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const gr = getGrForTransaction(transaction.delivery_id);
+                        if (!gr) {
+                          return (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                              No GR
+                            </span>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center space-x-2">
+                            {gr.gr_status === 'PENDING' && <Clock className="w-4 h-4 text-yellow-600" />}
+                            {gr.gr_status === 'APPROVED' && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                            {gr.gr_status === 'FINALIZED' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full border ${
+                              gr.gr_status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                              gr.gr_status === 'APPROVED' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                              'bg-green-100 text-green-800 border-green-200'
+                            }`}>
+                              {gr.gr_status}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-900">
@@ -277,13 +398,38 @@ export default function DeliveryReportsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => setSelectedTransaction(transaction)}
-                        className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>View</span>
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setSelectedTransaction(transaction)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>View</span>
+                        </button>
+                        {(() => {
+                          const gr = getGrForTransaction(transaction.delivery_id);
+                          if (!gr) {
+                            return (
+                              <button
+                                onClick={() => handleCreateGr(transaction)}
+                                className="text-green-600 hover:text-green-900 flex items-center space-x-1"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Create GR</span>
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => handleViewGr(gr)}
+                              className="text-purple-600 hover:text-purple-900 flex items-center space-x-1"
+                            >
+                              <FileCheck className="w-3 h-3" />
+                              <span>GR</span>
+                            </button>
+                          );
+                        })()}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -383,6 +529,196 @@ export default function DeliveryReportsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* GR Detail Modal */}
+      {showGrModal && selectedGr && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setShowGrModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  GR Details #{selectedGr.gr_id}
+                </h3>
+                <button
+                  onClick={() => setShowGrModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">GR Number</label>
+                  <p className="text-sm text-gray-900">{selectedGr.gr_number}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full border ${
+                    selectedGr.gr_status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                    selectedGr.gr_status === 'APPROVED' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                    'bg-green-100 text-green-800 border-green-200'
+                  }`}>
+                    {selectedGr.gr_status}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Customer</label>
+                  <p className="text-sm text-gray-900">{selectedGr.delivery_info.customer_name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Vehicle</label>
+                  <p className="text-sm text-gray-900">{selectedGr.delivery_info.vehicle_number}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Driver</label>
+                  <p className="text-sm text-gray-900">{selectedGr.delivery_info.driver_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Delivery Date</label>
+                  <p className="text-sm text-gray-900">{formatDateTime(selectedGr.delivery_info.delivery_datetime)}</p>
+                </div>
+              </div>
+
+              {/* Advance Amount Input (only for pending GRs) */}
+              {selectedGr.gr_status === 'PENDING' && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Driver Advance Amount</h4>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Advance Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={selectedGr.advance_amount}
+                      onChange={(e) => setSelectedGr({...selectedGr, advance_amount: parseFloat(e.target.value) || 0})}
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* GR Actions */}
+              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end space-x-3">
+                {selectedGr.gr_status === 'PENDING' && (
+                  <button
+                    onClick={() => handleApproveGr(selectedGr.gr_id)}
+                    disabled={isActionLoading === `approve-${selectedGr.gr_id}`}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{isActionLoading === `approve-${selectedGr.gr_id}` ? 'Approving...' : 'Approve GR'}</span>
+                  </button>
+                )}
+
+                {selectedGr.gr_status === 'APPROVED' && (
+                  <button
+                    onClick={() => handleFinalizeGr(selectedGr.gr_id)}
+                    disabled={isActionLoading === `finalize-${selectedGr.gr_id}`}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{isActionLoading === `finalize-${selectedGr.gr_id}` ? 'Finalizing...' : 'Finalize GR'}</span>
+                  </button>
+                )}
+
+                {(selectedGr.gr_status === 'APPROVED' || selectedGr.gr_status === 'FINALIZED') && (
+                  <button
+                    onClick={() => handleCloseTrip(selectedGr.gr_id)}
+                    disabled={isActionLoading === `close-${selectedGr.gr_id}`}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    <Truck className="w-4 h-4" />
+                    <span>{isActionLoading === `close-${selectedGr.gr_id}` ? 'Closing...' : 'Close Trip'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Create GR Modal */}
+      {showCreateGrModal && selectedTransaction && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setShowCreateGrModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Create Goods Receipt</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Transaction #{selectedTransaction.delivery_id} - {selectedTransaction.customer_name}
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driver Advance Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  value={advanceAmount}
+                  onChange={(e) => setAdvanceAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowCreateGrModal(false);
+                  setSelectedTransaction(null);
+                  setAdvanceAmount('');
+                }}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateGrSubmit}
+                disabled={isActionLoading === 'create-gr' || !advanceAmount}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isActionLoading === 'create-gr' ? 'Creating...' : 'Create GR'}</span>
+              </button>
             </div>
           </motion.div>
         </motion.div>

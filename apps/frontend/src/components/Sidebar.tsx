@@ -41,6 +41,10 @@ const navigationItems = [
         href: '/operations/delivery',
       },
       {
+        name: 'Goods Receipt',
+        href: '/operations/gr',
+      },
+      {
         name: 'Delivery Reports',
         href: '/operations/delivery-reports',
       },
