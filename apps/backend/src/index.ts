@@ -9,6 +9,7 @@ import driverRoutes from './domains/drivers/routes/driverRoutes';
 import rateContractRoutes from './domains/rate-contract/routes/rateContractRoutes';
 import deliveryTransactionRoutes from './domains/delivery/routes/deliveryTransactionRoutes';
 import grRoutes from './domains/gr/routes/grRoutes';
+import cylinderInventoryRoutes from './domains/cylinder-inventory/routes/cylinderInventoryRoutes';
 import authRoutes from './domains/auth-rbac/routes/authroutes';
 
 const app = express();
@@ -87,6 +88,9 @@ app.use('/api/delivery-transactions', deliveryTransactionRoutes);
 
 // GR routes
 app.use('/api/gr', grRoutes);
+
+// Cylinder inventory routes
+app.use('/api/cylinder-inventory', cylinderInventoryRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

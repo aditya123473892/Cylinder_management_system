@@ -1,14 +1,17 @@
 import { DeliveryTransactionRepository } from '../repositories/deliveryTransactionRepository';
 import { DeliveryTransactionWithLines, CreateDeliveryTransactionRequest } from '../types/deliveryTransaction';
 import { RateContractService } from '../../rate-contract/services/rateContractService';
+import { CylinderInventoryService } from '../../cylinder-inventory/services/cylinderInventoryService';
 
 export class DeliveryTransactionService {
   private repository: DeliveryTransactionRepository;
   private rateContractService: RateContractService;
+  private cylinderInventoryService: CylinderInventoryService;
 
   constructor() {
     this.repository = new DeliveryTransactionRepository();
     this.rateContractService = new RateContractService();
+    this.cylinderInventoryService = new CylinderInventoryService();
   }
 
   async getAllDeliveryTransactions(): Promise<any[]> {
@@ -83,7 +86,30 @@ export class DeliveryTransactionService {
         throw new Error('Delivery date and time cannot be in the future');
       }
 
-      return await this.repository.createWithTransaction(data, createdBy);
+      // Create the delivery transaction
+      const delivery = await this.repository.createWithTransaction(data, createdBy);
+
+      // Automatically update cylinder inventory for delivered quantities
+      // This initializes YARD inventory and moves cylinders to VEHICLE
+      try {
+        for (const line of delivery.lines || []) {
+          if (line.delivered_qty > 0) {
+            await this.cylinderInventoryService.recordDeliveryMovement(
+              delivery.delivery_id,
+              line.cylinder_type_id,
+              line.delivered_qty,
+              data.vehicle_id, // Pass vehicle ID for proper location tracking
+              createdBy
+            );
+          }
+        }
+      } catch (inventoryError) {
+        console.error('Error updating cylinder inventory for delivery:', inventoryError);
+        // Don't fail the delivery creation, but log the error
+        // This allows deliveries to be created even if inventory tracking fails initially
+      }
+
+      return delivery;
     } catch (error) {
       console.error('Error creating delivery transaction:', error);
       throw error instanceof Error ? error : new Error('Failed to create delivery transaction');
