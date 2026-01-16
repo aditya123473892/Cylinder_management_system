@@ -37,6 +37,18 @@ const navigationItems = [
     icon: Truck,
     children: [
       {
+        name: 'Cylinder Inventory',
+        href: '/operations/cylinder-inventory',
+      },
+      {
+        name: 'Initialize Inventory',
+        href: '/operations/cylinder-inventory/initialize',
+      },
+      {
+        name: 'Inventory Reports',
+        href: '/operations/cylinder-inventory/reports',
+      },
+      {
         name: 'Dispatch Note',
         href: '/operations/delivery',
       },
