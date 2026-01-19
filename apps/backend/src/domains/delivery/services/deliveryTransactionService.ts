@@ -1,14 +1,17 @@
 import { DeliveryTransactionRepository } from '../repositories/deliveryTransactionRepository';
 import { DeliveryTransactionWithLines, CreateDeliveryTransactionRequest } from '../types/deliveryTransaction';
 import { RateContractService } from '../../rate-contract/services/rateContractService';
+import { CylinderInventoryService } from '../../cylinder/services/cylinderInventoryService';
 
 export class DeliveryTransactionService {
   private repository: DeliveryTransactionRepository;
   private rateContractService: RateContractService;
+  private inventoryService: CylinderInventoryService;
 
   constructor() {
     this.repository = new DeliveryTransactionRepository();
     this.rateContractService = new RateContractService();
+    this.inventoryService = new CylinderInventoryService();
   }
 
   async getAllDeliveryTransactions(): Promise<any[]> {
@@ -83,7 +86,50 @@ export class DeliveryTransactionService {
         throw new Error('Delivery date and time cannot be in the future');
       }
 
-      return await this.repository.createWithTransaction(data, createdBy);
+      // Validate inventory availability for deliveries
+      for (const line of data.lines) {
+        if (line.delivered_qty > 0) {
+          const available = await this.inventoryService.getAvailableQuantity(
+            line.cylinder_type_id,
+            'YARD',
+            undefined,
+            'FILLED'
+          );
+          if (available < line.delivered_qty) {
+            throw new Error(`Insufficient FILLED cylinders available in YARD for cylinder type ${line.cylinder_type_id}. Available: ${available}, Required: ${line.delivered_qty}`);
+          }
+        }
+
+        // Validate return availability (customer must have empty cylinders to return)
+        if (line.returned_qty > 0) {
+          const availableEmpty = await this.inventoryService.getAvailableQuantity(
+            line.cylinder_type_id,
+            'CUSTOMER',
+            data.customer_id,
+            'EMPTY'
+          );
+          if (availableEmpty < line.returned_qty) {
+            throw new Error(`Customer does not have enough EMPTY cylinders to return for cylinder type ${line.cylinder_type_id}. Available: ${availableEmpty}, Required: ${line.returned_qty}`);
+          }
+        }
+      }
+
+      // Create delivery transaction
+      const delivery = await this.repository.createWithTransaction(data, createdBy);
+
+      // Process inventory movements for each line
+      for (const line of data.lines) {
+        await this.inventoryService.processDeliveryMovements(
+          line.cylinder_type_id,
+          line.delivered_qty,
+          line.returned_qty,
+          data.customer_id,
+          delivery.delivery_id,
+          createdBy
+        );
+      }
+
+      return delivery;
     } catch (error) {
       console.error('Error creating delivery transaction:', error);
       throw error instanceof Error ? error : new Error('Failed to create delivery transaction');

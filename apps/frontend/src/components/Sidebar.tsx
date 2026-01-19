@@ -37,6 +37,10 @@ const navigationItems = [
     icon: Truck,
     children: [
       {
+        name: 'Cylinder Inventory',
+        href: '/operations/inventory',
+      },
+      {
         name: 'Dispatch Note',
         href: '/operations/delivery',
       },
@@ -82,7 +86,7 @@ const navigationItems = [
         href: '/masters/vehicles',
       },
       {
-        name: 'Drivers',
+        name: 'Drivers', 
         href: '/masters/drivers',
       },
       {

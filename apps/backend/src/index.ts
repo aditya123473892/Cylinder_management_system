@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { connectDB } from './shared/config/database';
 import cylinderTypeRoutes from './domains/cylinder/routes/cylinderTypeRoutes';
+import cylinderInventoryRoutes from './domains/cylinder/routes/cylinderInventoryRoutes';
 import locationRoutes from './domains/locations/routes/locationRoutes';
 import customerRoutes from './domains/customer/routes/customerRoutes';
 import vehicleRoutes from './domains/vehicles/routes/vehicleRoutes';
@@ -66,6 +67,9 @@ app.use('/api/auth', authRoutes);
 
 // Cylinder type routes
 app.use('/api/cylinder-types', cylinderTypeRoutes);
+
+// Cylinder inventory routes
+app.use('/api/cylinder-inventory', cylinderInventoryRoutes);
 
 // Location routes
 app.use('/api/locations', locationRoutes);
