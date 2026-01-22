@@ -10,7 +10,7 @@ export class VehicleRepository {
   async findAll(): Promise<VehicleMaster[]> {
     const pool = await this.getPool();
     const result = await pool.request().query(`
-      SELECT vehicle_id, vehicle_number, vehicle_type, max_cylinder_capacity, transporter_id, is_active, created_at
+      SELECT vehicle_id, vehicle_number, vehicle_type, capacity_tonnes, transporter_id, is_active, created_at
       FROM dbo.VEHICLE_MASTER
       ORDER BY vehicle_id
     `);
@@ -22,7 +22,7 @@ export class VehicleRepository {
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        SELECT vehicle_id, vehicle_number, vehicle_type, max_cylinder_capacity, transporter_id, is_active, created_at
+        SELECT vehicle_id, vehicle_number, vehicle_type, capacity_tonnes, transporter_id, is_active, created_at
         FROM dbo.VEHICLE_MASTER
         WHERE vehicle_id = @id
       `);
@@ -34,13 +34,13 @@ export class VehicleRepository {
     const result = await pool.request()
       .input('vehicle_number', sql.VarChar(20), data.vehicle_number)
       .input('vehicle_type', sql.VarChar(50), data.vehicle_type)
-      .input('max_cylinder_capacity', sql.Int, data.max_cylinder_capacity)
+      .input('capacity_tonnes', sql.Decimal(10, 2), data.capacity_tonnes)
       .input('transporter_id', sql.Int, data.transporter_id ?? null)
       .input('is_active', sql.Bit, true)
       .query(`
-        INSERT INTO dbo.VEHICLE_MASTER (vehicle_number, vehicle_type, max_cylinder_capacity, transporter_id, is_active)
+        INSERT INTO dbo.VEHICLE_MASTER (vehicle_number, vehicle_type, capacity_tonnes, transporter_id, is_active)
         OUTPUT INSERTED.*
-        VALUES (@vehicle_number, @vehicle_type, @max_cylinder_capacity, @transporter_id, @is_active)
+        VALUES (@vehicle_number, @vehicle_type, @capacity_tonnes, @transporter_id, @is_active)
       `);
     return result.recordset[0];
   }
@@ -59,9 +59,9 @@ export class VehicleRepository {
       updates.push('vehicle_type = @vehicle_type');
       request.input('vehicle_type', sql.VarChar(50), data.vehicle_type);
     }
-    if (data.max_cylinder_capacity !== undefined) {
-      updates.push('max_cylinder_capacity = @max_cylinder_capacity');
-      request.input('max_cylinder_capacity', sql.Int, data.max_cylinder_capacity);
+    if (data.capacity_tonnes !== undefined) {
+      updates.push('capacity_tonnes = @capacity_tonnes');
+      request.input('capacity_tonnes', sql.Decimal(10, 2), data.capacity_tonnes);
     }
     if (data.transporter_id !== undefined) {
       updates.push('transporter_id = @transporter_id');

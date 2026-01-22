@@ -38,8 +38,8 @@ export class VehicleService {
       if (!data.vehicle_type || data.vehicle_type.trim().length === 0) {
         throw new Error('Vehicle type is required');
       }
-      if (!data.max_cylinder_capacity || data.max_cylinder_capacity <= 0) {
-        throw new Error('Max cylinder capacity must be a positive number');
+      if (!data.capacity_tonnes || data.capacity_tonnes <= 0) {
+        throw new Error('Capacity in tonnes must be a positive number');
       }
 
       // Validate lengths
@@ -99,8 +99,8 @@ export class VehicleService {
         }
       }
 
-      if (data.max_cylinder_capacity !== undefined && data.max_cylinder_capacity <= 0) {
-        throw new Error('Max cylinder capacity must be a positive number');
+      if (data.capacity_tonnes !== undefined && data.capacity_tonnes <= 0) {
+        throw new Error('Capacity in tonnes must be a positive number');
       }
 
       const updated = await this.repository.update(id, data);

@@ -25,7 +25,6 @@ export function CylinderTypeFormModal({
     Capacity: '',
     IsActive: true,
     HeightCM: undefined,
-    ManufacturingDate: undefined,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof CreateCylinderTypeRequest, string>>>({});
@@ -38,14 +37,12 @@ export function CylinderTypeFormModal({
         Capacity: cylinderType.Capacity,
         IsActive: cylinderType.IsActive,
         HeightCM: cylinderType.HeightCM || undefined,
-        ManufacturingDate: cylinderType.ManufacturingDate || undefined,
       });
     } else {
       setFormData({
         Capacity: '',
         IsActive: true,
         HeightCM: undefined,
-        ManufacturingDate: undefined,
       });
     }
     setErrors({});
@@ -64,18 +61,11 @@ export function CylinderTypeFormModal({
       newErrors.HeightCM = 'Height must be a positive number less than 1000';
     }
 
-    if (formData.ManufacturingDate && !isValidDate(formData.ManufacturingDate)) {
-      newErrors.ManufacturingDate = 'Invalid date format';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const isValidDate = (dateString: string): boolean => {
-    const date = new Date(dateString);
-    return !isNaN(date.getTime());
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +79,6 @@ export function CylinderTypeFormModal({
         ? {
             ...formData,
             HeightCM: formData.HeightCM || null,
-            ManufacturingDate: formData.ManufacturingDate || null,
           } as UpdateCylinderTypeRequest
         : formData;
 
@@ -200,23 +189,7 @@ export function CylinderTypeFormModal({
                   )}
                 </div>
 
-                {/* ManufacturingDate */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Manufacturing Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.ManufacturingDate || ''}
-                    onChange={(e) => handleInputChange('ManufacturingDate', e.target.value || undefined)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.ManufacturingDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {errors.ManufacturingDate && (
-                    <p className="mt-1 text-sm text-red-600">{errors.ManufacturingDate}</p>
-                  )}
-                </div>
+
 
                 {/* Actions */}
                 <div className="flex justify-end space-x-3 pt-4">

@@ -2,7 +2,7 @@ export interface VehicleMaster {
   vehicle_id: number;
   vehicle_number: string;
   vehicle_type: string;
-  max_cylinder_capacity: number;
+  capacity_tonnes: number;
   transporter_id: number | null;
   is_active: boolean;
   created_at: string;
@@ -11,14 +11,14 @@ export interface VehicleMaster {
 export interface CreateVehicleRequest {
   vehicle_number: string;
   vehicle_type: string;
-  max_cylinder_capacity: number;
+  capacity_tonnes: number;
   transporter_id?: number | null;
 }
 
 export interface UpdateVehicleRequest {
   vehicle_number?: string;
   vehicle_type?: string;
-  max_cylinder_capacity?: number;
+  capacity_tonnes?: number;
   transporter_id?: number | null;
   is_active?: boolean;
 }

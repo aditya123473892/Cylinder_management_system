@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Search, Edit2, Trash2, Loader2, MapPin } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Edit2, Trash2, Loader2, MapPin, Eye, X } from 'lucide-react';
 import { LocationMaster } from '../../../../types/location';
 import { locationApi } from '../../../../lib/api/locationApi';
 import { LocationFormModal } from '../../../../components/ui/LocationFormModal';
@@ -15,6 +15,7 @@ export default function LocationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<LocationMaster | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadLocations();
@@ -63,24 +64,11 @@ export default function LocationsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this location?')) return;
-
-    try {
-      await locationApi.deleteLocation(id);
-      toast.success('Location deleted successfully');
-      await loadLocations();
-    } catch (error) {
-      toast.error('Failed to delete location');
-      console.error('Error deleting location:', error);
-    }
-  };
 
   const filteredLocations = locations.filter(location =>
     location.LocationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     location.LocationType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (location.City && location.City.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (location.State && location.State.toLowerCase().includes(searchTerm.toLowerCase()))
+    (location.Address && location.Address.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const openCreateModal = () => {
@@ -159,13 +147,13 @@ export default function LocationsPage() {
                   Address
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  City
+                  Latitude
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  State
+                  Longitude
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer ID
+                  Image
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -203,13 +191,31 @@ export default function LocationsPage() {
                       {location.Address || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {location.City || '-'}
+                      {location.Latitude || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {location.State || '-'}
+                      {location.Longitude || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {location.CustomerId || '-'}
+                      {location.Image ? (
+                        <button
+                          onClick={() => setViewingImage(location.Image)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline flex items-center"
+                          title="View Image"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setViewingImage('')}
+                          className="text-gray-500 hover:text-gray-700 flex items-center"
+                          title="No Image"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </button>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -229,13 +235,7 @@ export default function LocationsPage() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(location.LocationId)}
-                          className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                       
                       </div>
                     </td>
                   </motion.tr>
@@ -254,6 +254,66 @@ export default function LocationsPage() {
         location={editingLocation}
         isLoading={submitting}
       />
+
+      {/* Image View Modal */}
+      <AnimatePresence>
+        {viewingImage !== null && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+              onClick={() => setViewingImage(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">Location Image</h3>
+                  <button
+                    onClick={() => setViewingImage(null)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 flex items-center justify-center min-h-[300px]">
+                  {viewingImage ? (
+                    <img
+                      src={viewingImage}
+                      alt="Location"
+                      className="max-w-full max-h-[500px] object-contain rounded-lg"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<div class="text-center text-gray-500"><p class="text-lg mb-2">❌</p><p>Failed to load image</p></div>';
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      <Eye className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium">No image uploaded</p>
+                      <p className="text-sm">This location does not have an associated image.</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

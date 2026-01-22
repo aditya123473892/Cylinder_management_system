@@ -46,14 +46,17 @@ export class LocationService {
       if (data.LocationType.length > 30) {
         throw new Error('Location type cannot exceed 30 characters');
       }
-      if (data.Address && data.Address.length > 255) {
-        throw new Error('Address cannot exceed 255 characters');
+      if (data.Address && data.Address.length > 500) {
+        throw new Error('Address cannot exceed 500 characters');
       }
-      if (data.City && data.City.length > 50) {
-        throw new Error('City cannot exceed 50 characters');
+      if (data.Image && data.Image.length > 255) {
+        throw new Error('Image path cannot exceed 255 characters');
       }
-      if (data.State && data.State.length > 50) {
-        throw new Error('State cannot exceed 50 characters');
+      if (data.Latitude !== undefined && (data.Latitude < -90 || data.Latitude > 90)) {
+        throw new Error('Latitude must be between -90 and 90');
+      }
+      if (data.Longitude !== undefined && (data.Longitude < -180 || data.Longitude > 180)) {
+        throw new Error('Longitude must be between -180 and 180');
       }
 
       return await this.repository.create(data);
@@ -92,14 +95,17 @@ export class LocationService {
           throw new Error('Location type cannot exceed 30 characters');
         }
       }
-      if (data.Address !== undefined && data.Address !== null && data.Address.length > 255) {
-        throw new Error('Address cannot exceed 255 characters');
+      if (data.Address !== undefined && data.Address !== null && data.Address.length > 500) {
+        throw new Error('Address cannot exceed 500 characters');
       }
-      if (data.City !== undefined && data.City !== null && data.City.length > 50) {
-        throw new Error('City cannot exceed 50 characters');
+      if (data.Image !== undefined && data.Image !== null && data.Image.length > 255) {
+        throw new Error('Image path cannot exceed 255 characters');
       }
-      if (data.State !== undefined && data.State !== null && data.State.length > 50) {
-        throw new Error('State cannot exceed 50 characters');
+      if (data.Latitude !== undefined && data.Latitude !== null && (data.Latitude < -90 || data.Latitude > 90)) {
+        throw new Error('Latitude must be between -90 and 90');
+      }
+      if (data.Longitude !== undefined && data.Longitude !== null && (data.Longitude < -180 || data.Longitude > 180)) {
+        throw new Error('Longitude must be between -180 and 180');
       }
 
       const updated = await this.repository.update(id, data);

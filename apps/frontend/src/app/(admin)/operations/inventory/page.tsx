@@ -250,6 +250,41 @@ export default function InventoryPage() {
             </div>
           </div>
 
+          {/* Customer-Specific Inventory */}
+          {inventoryItems.filter(item => item.locationType === 'CUSTOMER').length > 0 && (
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Cylinders with Customers</h3>
+                <div className="space-y-3">
+                  {inventoryItems
+                    .filter(item => item.locationType === 'CUSTOMER')
+                    .sort((a, b) => (a.locationReferenceName || '').localeCompare(b.locationReferenceName || ''))
+                    .map((item: InventoryItem) => (
+                    <div key={item.inventoryId} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-blue-50">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 rounded-full">
+                          <Package className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {item.locationReferenceName || 'Unknown Customer'}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {item.cylinderTypeName} - {item.cylinderStatus}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-blue-600">{item.quantity}</p>
+                        <p className="text-xs text-gray-500">cylinders</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Recent Movements */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
@@ -305,7 +340,13 @@ export default function InventoryPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center gap-2">
                           {getLocationIcon(item.locationType)}
-                          <span className="capitalize">{item.locationType.toLowerCase()}</span>
+                          <span className="capitalize">
+                            {item.locationType.toLowerCase() === 'customer' && item.locationReferenceName
+                              ? `Customer: ${item.locationReferenceName}`
+                              : item.locationType.toLowerCase() === 'vehicle' && item.locationReferenceName
+                              ? `Vehicle: ${item.locationReferenceName}`
+                              : item.locationType.toLowerCase()}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

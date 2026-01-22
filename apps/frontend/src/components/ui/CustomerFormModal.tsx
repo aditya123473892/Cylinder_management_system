@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Loader2 } from 'lucide-react';
+import { X, Save, Loader2, Upload } from 'lucide-react';
 import { CustomerMaster, CreateCustomerRequest, UpdateCustomerRequest } from '../../types/customer';
 import { LocationMaster } from '../../types/location';
 import { locationApi } from '../../lib/api/locationApi';
@@ -26,48 +26,97 @@ export function CustomerFormModal({
 }: CustomerFormModalProps) {
   const [formData, setFormData] = useState<CreateCustomerRequest>({
     CustomerName: '',
-    CustomerType: '',
-    ParentCustomerId: null,
-    LocationId: 0,
-    RetentionDays: 0,
+    ParentDealerId: null,
+    Location: '',
     IsActive: true,
     CreatedBy: null,
+    AadhaarImage: null,
+    PanImage: null,
   });
 
   const [locations, setLocations] = useState<LocationMaster[]>([]);
-  const [customers, setCustomers] = useState<CustomerMaster[]>([]);
+  const [dealers, setDealers] = useState<any[]>([]);
   const [errors, setErrors] = useState<Partial<Record<keyof CreateCustomerRequest, string>>>({});
+
+  const [aadhaarPreview, setAadhaarPreview] = useState<string | null>(null);
+  const [panPreview, setPanPreview] = useState<string | null>(null);
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+  const [panFile, setPanFile] = useState<File | null>(null);
+
+  const aadhaarInputRef = useRef<HTMLInputElement>(null);
+  const panInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!customer;
 
   useEffect(() => {
     if (isOpen) {
       loadLocations();
-      loadCustomers();
+      loadDealers();
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (customer) {
+      console.log('Customer data received:', customer);
+      console.log('AadhaarImage raw:', customer.AadhaarImage);
+      console.log('PanImage raw:', customer.PanImage);
+
       setFormData({
         CustomerName: customer.CustomerName,
-        CustomerType: customer.CustomerType,
-        ParentCustomerId: customer.ParentCustomerId,
-        LocationId: customer.LocationId,
-        RetentionDays: customer.RetentionDays,
+        ParentDealerId: customer.ParentDealerId,
+        Location: customer.Location,
         IsActive: customer.IsActive,
         CreatedBy: customer.CreatedBy,
+        AadhaarImage: customer.AadhaarImage,
+        PanImage: customer.PanImage,
       });
+
+      // Format base64 strings as data URLs for image preview
+      // Try different MIME types if the image doesn't load
+      const createDataUrl = (base64String: string) => {
+        if (!base64String) return null;
+
+        // Clean the base64 string (remove any data URL prefix if present)
+        const cleanBase64 = base64String.replace(/^data:image\/[a-z]+;base64,/, '');
+
+        // Try common image formats
+        const formats = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
+        for (const format of formats) {
+          try {
+            const dataUrl = `data:image/${format};base64,${cleanBase64}`;
+            console.log(`Trying ${format} format:`, dataUrl.substring(0, 50) + '...');
+            return dataUrl;
+          } catch (e) {
+            console.warn(`Failed to create ${format} data URL:`, e);
+          }
+        }
+
+        // Fallback to jpeg
+        return `data:image/jpeg;base64,${cleanBase64}`;
+      };
+
+      const aadhaarDataUrl = customer.AadhaarImage ? createDataUrl(customer.AadhaarImage) : null;
+      const panDataUrl = customer.PanImage ? createDataUrl(customer.PanImage) : null;
+
+      console.log('Aadhaar data URL created:', aadhaarDataUrl ? 'Yes' : 'No');
+      console.log('PAN data URL created:', panDataUrl ? 'Yes' : 'No');
+
+      setAadhaarPreview(aadhaarDataUrl);
+      setPanPreview(panDataUrl);
     } else {
       setFormData({
         CustomerName: '',
-        CustomerType: '',
-        ParentCustomerId: null,
-        LocationId: 0,
-        RetentionDays: 0,
+        ParentDealerId: null,
+        Location: '',
         IsActive: true,
         CreatedBy: null,
+        AadhaarImage: null,
+        PanImage: null,
       });
+      setAadhaarPreview(null);
+      setPanPreview(null);
+      setAadhaarFile(null);
+      setPanFile(null);
     }
     setErrors({});
   }, [customer, isOpen]);
@@ -82,13 +131,14 @@ export function CustomerFormModal({
     }
   };
 
-  const loadCustomers = async () => {
+  const loadDealers = async () => {
     try {
-      const data = await customerApi.getAllCustomers();
-      setCustomers(data);
+      const { dealerApi } = await import('../../lib/api/dealerApi');
+      const data = await dealerApi.getAllDealers();
+      setDealers(data);
     } catch (error) {
-      console.error('Error loading customers:', error);
-      toast.error('Failed to load customers');
+      console.error('Error loading dealers:', error);
+      toast.error('Failed to load dealers');
     }
   };
 
@@ -101,22 +151,60 @@ export function CustomerFormModal({
       newErrors.CustomerName = 'Customer name cannot exceed 200 characters';
     }
 
-    if (!formData.CustomerType.trim()) {
-      newErrors.CustomerType = 'Customer type is required';
-    } else if (formData.CustomerType.length > 20) {
-      newErrors.CustomerType = 'Customer type cannot exceed 20 characters';
-    }
-
-    if (!formData.LocationId || formData.LocationId <= 0) {
-      newErrors.LocationId = 'Valid location is required';
-    }
-
-    if (formData.RetentionDays < 0) {
-      newErrors.RetentionDays = 'Retention days must be non-negative';
+    if (!formData.Location.trim()) {
+      newErrors.Location = 'Location is required';
+    } else if (formData.Location.length > 200) {
+      newErrors.Location = 'Location cannot exceed 200 characters';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'aadhaar' | 'pan') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (field === 'aadhaar') {
+        setAadhaarFile(file);
+        setAadhaarPreview(base64);
+        setFormData(prev => ({ ...prev, AadhaarImage: base64 }));
+      } else {
+        setPanFile(file);
+        setPanPreview(base64);
+        setFormData(prev => ({ ...prev, PanImage: base64 }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = (field: 'aadhaar' | 'pan') => {
+    if (field === 'aadhaar') {
+      setAadhaarFile(null);
+      setAadhaarPreview(null);
+      setFormData(prev => ({ ...prev, AadhaarImage: null }));
+      if (aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+    } else {
+      setPanFile(null);
+      setPanPreview(null);
+      setFormData(prev => ({ ...prev, PanImage: null }));
+      if (panInputRef.current) panInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,7 +218,7 @@ export function CustomerFormModal({
       const submitData = isEditing
         ? {
             ...formData,
-            ParentCustomerId: formData.ParentCustomerId || null,
+            ParentDealerId: formData.ParentDealerId || null,
           } as UpdateCustomerRequest
         : formData;
 
@@ -149,7 +237,7 @@ export function CustomerFormModal({
     }
   };
 
-  const customerTypes = ['Dealer', 'Customer', 'Sub-Dealer'];
+
 
   return (
     <AnimatePresence>
@@ -186,7 +274,8 @@ export function CustomerFormModal({
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="p-6">
+                <div className="space-y-4">
                 {/* Customer Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -207,44 +296,22 @@ export function CustomerFormModal({
                   )}
                 </div>
 
-                {/* Customer Type */}
+                {/* Parent Dealer */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Type *
+                    Parent Dealer
                   </label>
                   <select
-                    value={formData.CustomerType}
-                    onChange={(e) => handleInputChange('CustomerType', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.CustomerType ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Select customer type</option>
-                    {customerTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                  {errors.CustomerType && (
-                    <p className="mt-1 text-sm text-red-600">{errors.CustomerType}</p>
-                  )}
-                </div>
-
-                {/* Parent Customer */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Parent Customer
-                  </label>
-                  <select
-                    value={formData.ParentCustomerId || ''}
-                    onChange={(e) => handleInputChange('ParentCustomerId', e.target.value ? parseInt(e.target.value) : null)}
+                    value={formData.ParentDealerId || ''}
+                    onChange={(e) => handleInputChange('ParentDealerId', e.target.value ? parseInt(e.target.value) : null)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">No parent customer</option>
-                    {customers
-                      .filter(c => c.CustomerId !== customer?.CustomerId) // Exclude self
-                      .map(c => (
-                        <option key={c.CustomerId} value={c.CustomerId}>{c.CustomerName}</option>
-                      ))}
+                    <option value="">No parent dealer</option>
+                    {dealers.map(dealer => (
+                      <option key={dealer.DealerId} value={dealer.DealerId}>
+                        {dealer.DealerName}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -253,42 +320,18 @@ export function CustomerFormModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Location *
                   </label>
-                  <select
-                    value={formData.LocationId || ''}
-                    onChange={(e) => handleInputChange('LocationId', parseInt(e.target.value))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.LocationId ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Select location</option>
-                    {locations.map(location => (
-                      <option key={location.LocationId} value={location.LocationId}>
-                        {location.LocationName}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.LocationId && (
-                    <p className="mt-1 text-sm text-red-600">{errors.LocationId}</p>
-                  )}
-                </div>
-
-                {/* Retention Days */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Retention Days *
-                  </label>
                   <input
-                    type="number"
-                    min="0"
-                    value={formData.RetentionDays}
-                    onChange={(e) => handleInputChange('RetentionDays', parseInt(e.target.value) || 0)}
+                    type="text"
+                    value={formData.Location}
+                    onChange={(e) => handleInputChange('Location', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.RetentionDays ? 'border-red-500' : 'border-gray-300'
+                      errors.Location ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="Enter retention days"
+                    placeholder="Enter location"
+                    maxLength={200}
                   />
-                  {errors.RetentionDays && (
-                    <p className="mt-1 text-sm text-red-600">{errors.RetentionDays}</p>
+                  {errors.Location && (
+                    <p className="mt-1 text-sm text-red-600">{errors.Location}</p>
                   )}
                 </div>
 
@@ -305,30 +348,114 @@ export function CustomerFormModal({
                     Active
                   </label>
                 </div>
+              </div>
 
-                {/* Actions */}
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
-                    disabled={isLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-2" />
+              {/* Image Uploads */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Aadhaar Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Aadhaar Image
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      ref={aadhaarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'aadhaar')}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => aadhaarInputRef.current?.click()}
+                      className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose Aadhaar Image
+                    </button>
+                    {aadhaarPreview && (
+                      <div className="relative">
+                        <img
+                          src={aadhaarPreview}
+                          alt="Aadhaar Preview"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage('aadhaar')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
-                    {isLoading ? 'Saving...' : 'Save'}
-                  </button>
+                  </div>
                 </div>
+
+                {/* PAN Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PAN Image
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      ref={panInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'pan')}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => panInputRef.current?.click()}
+                      className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose PAN Image
+                    </button>
+                    {panPreview && (
+                      <div className="relative">
+                        <img
+                          src={panPreview}
+                          alt="PAN Preview"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage('pan')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  {isLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
               </form>
             </div>
           </motion.div>

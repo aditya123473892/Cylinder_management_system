@@ -19,9 +19,21 @@ export class DeliveryTransactionController {
       });
     } catch (error) {
       console.error('Error in getAllDeliveryTransactions:', error);
-      res.status(500).json({
+      let statusCode = 500;
+      let errorType = 'INTERNAL_ERROR';
+
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('not found')) {
+          statusCode = 404;
+          errorType = 'NOT_FOUND_ERROR';
+        }
+      }
+
+      res.status(statusCode).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Internal server error'
+        message: error instanceof Error ? error.message : 'Internal server error',
+        errorType
       });
     }
   }
@@ -68,7 +80,8 @@ export class DeliveryTransactionController {
       if (!createdBy) {
         res.status(401).json({
           success: false,
-          message: 'User authentication required'
+          message: 'User authentication required',
+          errorType: 'AUTHENTICATION_ERROR'
         });
         return;
       }
@@ -81,10 +94,44 @@ export class DeliveryTransactionController {
       });
     } catch (error) {
       console.error('Error in createDeliveryTransaction:', error);
-      const statusCode = error instanceof Error && error.message.includes('required') ? 400 : 500;
+
+      // Determine appropriate status code and error type based on error message
+      let statusCode = 500;
+      let errorType = 'INTERNAL_ERROR';
+
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+
+        // Validation errors (client-side issues)
+        if (errorMessage.includes('required') ||
+            errorMessage.includes('invalid') ||
+            errorMessage.includes('cannot be negative') ||
+            errorMessage.includes('must be greater than') ||
+            errorMessage.includes('does not have enough') ||
+            errorMessage.includes('insufficient') ||
+            errorMessage.includes('available') ||
+            errorMessage.includes('future')) {
+          statusCode = 400;
+          errorType = 'VALIDATION_ERROR';
+        }
+        // Authentication/Authorization errors
+        else if (errorMessage.includes('authentication') ||
+                 errorMessage.includes('authorization') ||
+                 errorMessage.includes('permission')) {
+          statusCode = 401;
+          errorType = 'AUTHENTICATION_ERROR';
+        }
+        // Not found errors
+        else if (errorMessage.includes('not found')) {
+          statusCode = 404;
+          errorType = 'NOT_FOUND_ERROR';
+        }
+      }
+
       res.status(statusCode).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Internal server error'
+        message: error instanceof Error ? error.message : 'Internal server error',
+        errorType
       });
     }
   }

@@ -24,14 +24,14 @@ export function LocationFormModal({
   const [formData, setFormData] = useState<CreateLocationRequest>({
     LocationName: '',
     LocationType: '',
-    CustomerId: undefined,
     Address: '',
-    City: '',
-    State: '',
+    Image: '',
+    Latitude: undefined,
+    Longitude: undefined,
     IsActive: true,
   });
 
-  const [errors, setErrors] = useState<Partial<Record<keyof CreateLocationRequest, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
   const isEditing = !!location;
 
@@ -40,20 +40,20 @@ export function LocationFormModal({
       setFormData({
         LocationName: location.LocationName,
         LocationType: location.LocationType,
-        CustomerId: location.CustomerId || undefined,
         Address: location.Address || '',
-        City: location.City || '',
-        State: location.State || '',
+        Image: location.Image || '',
+        Latitude: location.Latitude || undefined,
+        Longitude: location.Longitude || undefined,
         IsActive: location.IsActive,
       });
     } else {
       setFormData({
         LocationName: '',
         LocationType: '',
-        CustomerId: undefined,
         Address: '',
-        City: '',
-        State: '',
+        Image: '',
+        Latitude: undefined,
+        Longitude: undefined,
         IsActive: true,
       });
     }
@@ -75,16 +75,20 @@ export function LocationFormModal({
       newErrors.LocationType = 'Location type cannot exceed 30 characters';
     }
 
-    if (formData.Address && formData.Address.length > 255) {
-      newErrors.Address = 'Address cannot exceed 255 characters';
+    if (formData.Address && formData.Address.length > 500) {
+      newErrors.Address = 'Address cannot exceed 500 characters';
     }
 
-    if (formData.City && formData.City.length > 50) {
-      newErrors.City = 'City cannot exceed 50 characters';
+    if (formData.Image && formData.Image.length > 255) {
+      newErrors.Image = 'Image path cannot exceed 255 characters';
     }
 
-    if (formData.State && formData.State.length > 50) {
-      newErrors.State = 'State cannot exceed 50 characters';
+    if (formData.Latitude !== undefined && (formData.Latitude < -90 || formData.Latitude > 90)) {
+      newErrors.Latitude = 'Latitude must be between -90 and 90';
+    }
+
+    if (formData.Longitude !== undefined && (formData.Longitude < -180 || formData.Longitude > 180)) {
+      newErrors.Longitude = 'Longitude must be between -180 and 180';
     }
 
     setErrors(newErrors);
@@ -102,10 +106,10 @@ export function LocationFormModal({
       const submitData = isEditing
         ? {
             ...formData,
-            CustomerId: formData.CustomerId || null,
             Address: formData.Address || null,
-            City: formData.City || null,
-            State: formData.State || null,
+            Image: formData.Image || null,
+            Latitude: formData.Latitude || null,
+            Longitude: formData.Longitude || null,
           } as UpdateLocationRequest
         : formData;
 
@@ -208,19 +212,26 @@ export function LocationFormModal({
                     )}
                   </div>
 
-                  {/* Customer ID */}
+                  {/* Latitude */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Customer ID
+                      Latitude
                     </label>
                     <input
                       type="number"
-                      value={formData.CustomerId || ''}
-                      onChange={(e) => handleInputChange('CustomerId', e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter customer ID (optional)"
-                      min="1"
+                      step="0.000001"
+                      min="-90"
+                      max="90"
+                      value={formData.Latitude || ''}
+                      onChange={(e) => handleInputChange('Latitude', e.target.value ? parseFloat(e.target.value) : undefined)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.Latitude ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter latitude (-90 to 90)"
                     />
+                    {errors.Latitude && (
+                      <p className="mt-1 text-sm text-red-600">{errors.Latitude}</p>
+                    )}
                   </div>
 
                   {/* Address */}
@@ -234,52 +245,54 @@ export function LocationFormModal({
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                         errors.Address ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter address"
+                      placeholder="Enter complete address"
                       rows={3}
-                      maxLength={255}
+                      maxLength={500}
                     />
                     {errors.Address && (
                       <p className="mt-1 text-sm text-red-600">{errors.Address}</p>
                     )}
                   </div>
 
-                  {/* City */}
+                  {/* Longitude */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City
+                      Longitude
                     </label>
                     <input
-                      type="text"
-                      value={formData.City}
-                      onChange={(e) => handleInputChange('City', e.target.value)}
+                      type="number"
+                      step="0.000001"
+                      min="-180"
+                      max="180"
+                      value={formData.Longitude || ''}
+                      onChange={(e) => handleInputChange('Longitude', e.target.value ? parseFloat(e.target.value) : undefined)}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.City ? 'border-red-500' : 'border-gray-300'
+                        errors.Longitude ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter city"
-                      maxLength={50}
+                      placeholder="Enter longitude (-180 to 180)"
                     />
-                    {errors.City && (
-                      <p className="mt-1 text-sm text-red-600">{errors.City}</p>
+                    {errors.Longitude && (
+                      <p className="mt-1 text-sm text-red-600">{errors.Longitude}</p>
                     )}
                   </div>
 
-                  {/* State */}
-                  <div>
+                  {/* Image */}
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State
+                      Location Image
                     </label>
                     <input
                       type="text"
-                      value={formData.State}
-                      onChange={(e) => handleInputChange('State', e.target.value)}
+                      value={formData.Image}
+                      onChange={(e) => handleInputChange('Image', e.target.value)}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.State ? 'border-red-500' : 'border-gray-300'
+                        errors.Image ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter state"
-                      maxLength={50}
+                      placeholder="Enter image URL or path (optional)"
+                      maxLength={255}
                     />
-                    {errors.State && (
-                      <p className="mt-1 text-sm text-red-600">{errors.State}</p>
+                    {errors.Image && (
+                      <p className="mt-1 text-sm text-red-600">{errors.Image}</p>
                     )}
                   </div>
 

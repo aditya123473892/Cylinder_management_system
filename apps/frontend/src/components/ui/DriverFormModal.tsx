@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Phone, CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Save, User, Phone, CreditCard, Calendar, CheckCircle, AlertCircle, Upload } from 'lucide-react';
 import { DriverMaster, CreateDriverRequest, UpdateDriverRequest } from '../../types/driver';
 import { driverApi } from '../../lib/api/driverApi';
 import toast from 'react-hot-toast';
@@ -20,8 +20,18 @@ export function DriverFormModal({ isOpen, onClose, driver, onSuccess }: DriverFo
     mobile_number: '',
     license_number: '',
     license_expiry_date: '',
+    AadhaarImage: null as string | null,
+    PanImage: null as string | null,
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  const [aadhaarPreview, setAadhaarPreview] = useState<string | null>(null);
+  const [panPreview, setPanPreview] = useState<string | null>(null);
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+  const [panFile, setPanFile] = useState<File | null>(null);
+
+  const aadhaarInputRef = useRef<HTMLInputElement>(null);
+  const panInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!driver;
 
@@ -32,14 +42,51 @@ export function DriverFormModal({ isOpen, onClose, driver, onSuccess }: DriverFo
         mobile_number: driver.mobile_number,
         license_number: driver.license_number,
         license_expiry_date: driver.license_expiry_date.split('T')[0], // Extract date part
+        AadhaarImage: driver.AadhaarImage,
+        PanImage: driver.PanImage,
       });
+
+      // Format base64 strings as data URLs for image preview
+      // Try different MIME types if the image doesn't load
+      const createDataUrl = (base64String: string) => {
+        if (!base64String) return null;
+
+        // Clean the base64 string (remove any data URL prefix if present)
+        const cleanBase64 = base64String.replace(/^data:image\/[a-z]+;base64,/, '');
+
+        // Try common image formats
+        const formats = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
+        for (const format of formats) {
+          try {
+            const dataUrl = `data:image/${format};base64,${cleanBase64}`;
+            return dataUrl;
+          } catch (e) {
+            console.warn(`Failed to create ${format} data URL:`, e);
+          }
+        }
+
+        // Fallback to jpeg
+        return `data:image/jpeg;base64,${cleanBase64}`;
+      };
+
+      const aadhaarDataUrl = driver.AadhaarImage ? createDataUrl(driver.AadhaarImage) : null;
+      const panDataUrl = driver.PanImage ? createDataUrl(driver.PanImage) : null;
+
+      setAadhaarPreview(aadhaarDataUrl);
+      setPanPreview(panDataUrl);
     } else {
       setFormData({
         driver_name: '',
         mobile_number: '',
         license_number: '',
         license_expiry_date: '',
+        AadhaarImage: null,
+        PanImage: null,
       });
+      setAadhaarPreview(null);
+      setPanPreview(null);
+      setAadhaarFile(null);
+      setPanFile(null);
     }
   }, [driver, isOpen]);
 
@@ -70,6 +117,9 @@ export function DriverFormModal({ isOpen, onClose, driver, onSuccess }: DriverFo
         mobile_number: formData.mobile_number.trim(),
         license_number: formData.license_number.trim(),
         license_expiry_date: formData.license_expiry_date,
+        AadhaarImage: aadhaarFile ? formData.AadhaarImage : (isEditing && driver?.AadhaarImage ? driver.AadhaarImage : null),
+        PanImage: panFile ? formData.PanImage : (isEditing && driver?.PanImage ? driver.PanImage : null),
+        CreatedBy: 1, // TODO: Get from auth context
       };
 
       if (isEditing && driver) {
@@ -112,6 +162,55 @@ export function DriverFormModal({ isOpen, onClose, driver, onSuccess }: DriverFo
 
   const isLicenseExpired = (expiryDate: string) => {
     return getDaysUntilExpiry(expiryDate) < 0;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'aadhaar' | 'pan') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      // Extract just the base64 part (remove "data:image/...;base64," prefix)
+      const base64 = dataUrl.split(',')[1];
+
+      if (field === 'aadhaar') {
+        setAadhaarFile(file);
+        setAadhaarPreview(dataUrl); // Keep full data URL for preview
+        setFormData(prev => ({ ...prev, AadhaarImage: base64 })); // Store just base64 for backend
+      } else {
+        setPanFile(file);
+        setPanPreview(dataUrl); // Keep full data URL for preview
+        setFormData(prev => ({ ...prev, PanImage: base64 })); // Store just base64 for backend
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = (field: 'aadhaar' | 'pan') => {
+    if (field === 'aadhaar') {
+      setAadhaarFile(null);
+      setAadhaarPreview(null);
+      setFormData(prev => ({ ...prev, AadhaarImage: null }));
+      if (aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+    } else {
+      setPanFile(null);
+      setPanPreview(null);
+      setFormData(prev => ({ ...prev, PanImage: null }));
+      if (panInputRef.current) panInputRef.current.value = '';
+    }
   };
 
   return (
@@ -254,6 +353,89 @@ export function DriverFormModal({ isOpen, onClose, driver, onSuccess }: DriverFo
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Image Uploads */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Aadhaar Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Aadhaar Image
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      ref={aadhaarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'aadhaar')}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => aadhaarInputRef.current?.click()}
+                      className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose Aadhaar Image
+                    </button>
+                    {aadhaarPreview && (
+                      <div className="relative">
+                        <img
+                          src={aadhaarPreview}
+                          alt="Aadhaar Preview"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage('aadhaar')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* PAN Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PAN Image
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      ref={panInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'pan')}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => panInputRef.current?.click()}
+                      className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose PAN Image
+                    </button>
+                    {panPreview && (
+                      <div className="relative">
+                        <img
+                          src={panPreview}
+                          alt="PAN Preview"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage('pan')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Actions */}

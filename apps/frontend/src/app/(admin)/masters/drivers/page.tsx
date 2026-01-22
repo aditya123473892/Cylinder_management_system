@@ -142,11 +142,15 @@ export default function DriversPage() {
                   License Info
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Status
+                  Aadhaar
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Created
+                  PAN
                 </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Status
+                </th>
+            
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Actions
                 </th>
@@ -155,7 +159,7 @@ export default function DriversPage() {
             <tbody className="divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center space-x-2">
                       <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-gray-600">Loading drivers...</span>
@@ -164,7 +168,7 @@ export default function DriversPage() {
                 </tr>
               ) : filteredDrivers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center space-y-2">
                       <User className="w-8 h-8 text-gray-400" />
                       <p className="text-gray-600">
@@ -210,6 +214,36 @@ export default function DriversPage() {
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {driver.AadhaarImage ? (
+                          <img
+                            src={driver.AadhaarImage.startsWith('data:') ? driver.AadhaarImage : `data:image/jpeg;base64,${driver.AadhaarImage}`}
+                            alt="Aadhaar"
+                            className="w-12 h-12 object-cover rounded border"
+                            onError={(e) => {
+                              console.error('Aadhaar image failed to load:', driver.AadhaarImage);
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs">No image</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {driver.PanImage ? (
+                          <img
+                            src={driver.PanImage.startsWith('data:') ? driver.PanImage : `data:image/jpeg;base64,${driver.PanImage}`}
+                            alt="PAN"
+                            className="w-12 h-12 object-cover rounded border"
+                            onError={(e) => {
+                              console.error('PAN image failed to load:', driver.PanImage);
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs">No image</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
                           {licenseStatus.status === 'expired' ? (
@@ -241,11 +275,7 @@ export default function DriversPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-600">
-                          {formatDate(driver.created_at)}
-                        </div>
-                      </td>
+                 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <button
@@ -255,13 +285,7 @@ export default function DriversPage() {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(driver.driver_id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete driver"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        
                         </div>
                       </td>
                     </motion.tr>

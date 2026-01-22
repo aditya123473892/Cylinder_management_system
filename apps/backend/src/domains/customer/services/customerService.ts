@@ -35,34 +35,30 @@ export class CustomerService {
       if (!data.CustomerName || data.CustomerName.trim().length === 0) {
         throw new Error('Customer name is required');
       }
-      if (!data.CustomerType || data.CustomerType.trim().length === 0) {
-        throw new Error('Customer type is required');
-      }
-      if (!data.LocationId || data.LocationId <= 0) {
-        throw new Error('Valid location ID is required');
-      }
-      if (data.RetentionDays < 0) {
-        throw new Error('Retention days must be non-negative');
+      if (!data.Location || data.Location.trim().length === 0) {
+        throw new Error('Location is required');
       }
 
       // Validate lengths
       if (data.CustomerName.length > 200) {
         throw new Error('Customer name cannot exceed 200 characters');
       }
-      if (data.CustomerType.length > 20) {
-        throw new Error('Customer type cannot exceed 20 characters');
+
+      // Validate location
+      if (!data.Location || data.Location.trim().length === 0) {
+        throw new Error('Location is required');
+      }
+      if (data.Location.length > 200) {
+        throw new Error('Location cannot exceed 200 characters');
       }
 
-      // Validate parent customer if provided
-      if (data.ParentCustomerId !== undefined && data.ParentCustomerId !== null) {
-        if (data.ParentCustomerId <= 0) {
-          throw new Error('Invalid parent customer ID');
+      // Validate parent dealer if provided
+      if (data.ParentDealerId !== undefined && data.ParentDealerId !== null) {
+        if (data.ParentDealerId <= 0) {
+          throw new Error('Invalid parent dealer ID');
         }
-        // Check if parent customer exists
-        const parentExists = await this.repository.exists(data.ParentCustomerId);
-        if (!parentExists) {
-          throw new Error('Parent customer does not exist');
-        }
+        // TODO: Check if parent dealer exists (would need dealer repository)
+        // For now, just validate the ID is positive
       }
 
       return await this.repository.create(data);
@@ -94,33 +90,22 @@ export class CustomerService {
         }
       }
 
-      if (data.CustomerType !== undefined) {
-        if (data.CustomerType.trim().length === 0) {
-          throw new Error('Customer type cannot be empty');
+      if (data.Location !== undefined) {
+        if (data.Location.trim().length === 0) {
+          throw new Error('Location cannot be empty');
         }
-        if (data.CustomerType.length > 20) {
-          throw new Error('Customer type cannot exceed 20 characters');
+        if (data.Location.length > 200) {
+          throw new Error('Location cannot exceed 200 characters');
         }
       }
 
-      if (data.LocationId !== undefined && data.LocationId <= 0) {
-        throw new Error('Invalid location ID');
-      }
-
-      if (data.RetentionDays !== undefined && data.RetentionDays < 0) {
-        throw new Error('Retention days must be non-negative');
-      }
-
-      // Validate parent customer if provided
-      if (data.ParentCustomerId !== undefined && data.ParentCustomerId !== null) {
-        if (data.ParentCustomerId <= 0) {
-          throw new Error('Invalid parent customer ID');
+      // Validate parent dealer if provided
+      if (data.ParentDealerId !== undefined && data.ParentDealerId !== null) {
+        if (data.ParentDealerId <= 0) {
+          throw new Error('Invalid parent dealer ID');
         }
-        // Check if parent customer exists
-        const parentExists = await this.repository.exists(data.ParentCustomerId);
-        if (!parentExists) {
-          throw new Error('Parent customer does not exist');
-        }
+        // TODO: Check if parent dealer exists (would need dealer repository)
+        // For now, just validate the ID is positive
       }
 
       const updated = await this.repository.update(id, data);
@@ -149,7 +134,7 @@ export class CustomerService {
 
       // Check if customer has child customers
       const allCustomers = await this.repository.findAll();
-      const hasChildren = allCustomers.some(customer => customer.ParentCustomerId === id);
+      const hasChildren = allCustomers.some(customer => customer.ParentDealerId === id);
       if (hasChildren) {
         throw new Error('Cannot delete customer with child customers');
       }

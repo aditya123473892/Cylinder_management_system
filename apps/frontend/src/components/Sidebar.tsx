@@ -44,6 +44,10 @@ const navigationItems = [
         name: 'Dispatch Note',
         href: '/operations/delivery',
       },
+            {
+        name: 'Cylinder Initialization',
+        href: '/operations/initialiazation',
+      },
       {
         name: 'Goods Receipt',
         href: '/operations/gr',
@@ -94,8 +98,8 @@ const navigationItems = [
         href: '/masters/rate-contracts',
       },
       {
-        name: 'Sub-dealers',
-        href: '/masters/sub-dealers',
+        name: 'Dealers',
+        href: '/masters/dealers',
       },
       {
         name: 'Transporters',

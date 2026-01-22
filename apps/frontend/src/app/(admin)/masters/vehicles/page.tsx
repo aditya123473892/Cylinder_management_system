@@ -116,17 +116,13 @@ export default function VehiclesPage() {
                   Vehicle Details
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Capacity
+                  Capacity (Tonnes)
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Transporter
-                </th>
+              
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Created
-                </th>
+             
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Actions
                 </th>
@@ -170,14 +166,10 @@ export default function VehiclesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {vehicle.max_cylinder_capacity} cylinders
+                        {vehicle.capacity_tonnes} tonnes
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {vehicle.transporter_id ? `ID: ${vehicle.transporter_id}` : 'Not assigned'}
-                      </div>
-                    </td>
+                  
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         {vehicle.is_active ? (
@@ -193,11 +185,7 @@ export default function VehiclesPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600">
-                        {formatDate(vehicle.created_at)}
-                      </div>
-                    </td>
+                  
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         <button

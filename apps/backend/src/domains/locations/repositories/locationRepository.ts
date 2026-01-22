@@ -10,7 +10,7 @@ export class LocationRepository {
   async findAll(): Promise<LocationMaster[]> {
     const pool = await this.getPool();
     const result = await pool.request().query(`
-      SELECT LocationId, LocationName, LocationType, CustomerId, Address, City, State, IsActive, CreatedAt
+      SELECT LocationId, LocationName, LocationType, Address, Image, Latitude, Longitude, IsActive, CreatedAt
       FROM dbo.LOCATION_MASTER
       ORDER BY LocationId
     `);
@@ -22,7 +22,7 @@ export class LocationRepository {
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        SELECT LocationId, LocationName, LocationType, CustomerId, Address, City, State, IsActive, CreatedAt
+        SELECT LocationId, LocationName, LocationType, Address, Image, Latitude, Longitude, IsActive, CreatedAt
         FROM dbo.LOCATION_MASTER
         WHERE LocationId = @id
       `);
@@ -34,15 +34,15 @@ export class LocationRepository {
     const result = await pool.request()
       .input('LocationName', sql.VarChar(100), data.LocationName)
       .input('LocationType', sql.VarChar(30), data.LocationType)
-      .input('CustomerId', sql.Int, data.CustomerId ?? null)
-      .input('Address', sql.VarChar(255), data.Address ?? null)
-      .input('City', sql.VarChar(50), data.City ?? null)
-      .input('State', sql.VarChar(50), data.State ?? null)
+      .input('Address', sql.VarChar(500), data.Address ?? null)
+      .input('Image', sql.VarChar(255), data.Image ?? null)
+      .input('Latitude', sql.Decimal(9, 6), data.Latitude ?? null)
+      .input('Longitude', sql.Decimal(9, 6), data.Longitude ?? null)
       .input('IsActive', sql.Bit, data.IsActive ?? true)
       .query(`
-        INSERT INTO dbo.LOCATION_MASTER (LocationName, LocationType, CustomerId, Address, City, State, IsActive)
+        INSERT INTO dbo.LOCATION_MASTER (LocationName, LocationType, Address, Image, Latitude, Longitude, IsActive)
         OUTPUT INSERTED.*
-        VALUES (@LocationName, @LocationType, @CustomerId, @Address, @City, @State, @IsActive)
+        VALUES (@LocationName, @LocationType, @Address, @Image, @Latitude, @Longitude, @IsActive)
       `);
     return result.recordset[0];
   }
@@ -61,21 +61,21 @@ export class LocationRepository {
       updates.push('LocationType = @LocationType');
       request.input('LocationType', sql.VarChar(30), data.LocationType);
     }
-    if (data.CustomerId !== undefined) {
-      updates.push('CustomerId = @CustomerId');
-      request.input('CustomerId', sql.Int, data.CustomerId);
-    }
     if (data.Address !== undefined) {
       updates.push('Address = @Address');
-      request.input('Address', sql.VarChar(255), data.Address);
+      request.input('Address', sql.VarChar(500), data.Address);
     }
-    if (data.City !== undefined) {
-      updates.push('City = @City');
-      request.input('City', sql.VarChar(50), data.City);
+    if (data.Image !== undefined) {
+      updates.push('Image = @Image');
+      request.input('Image', sql.VarChar(255), data.Image);
     }
-    if (data.State !== undefined) {
-      updates.push('State = @State');
-      request.input('State', sql.VarChar(50), data.State);
+    if (data.Latitude !== undefined) {
+      updates.push('Latitude = @Latitude');
+      request.input('Latitude', sql.Decimal(9, 6), data.Latitude);
+    }
+    if (data.Longitude !== undefined) {
+      updates.push('Longitude = @Longitude');
+      request.input('Longitude', sql.Decimal(9, 6), data.Longitude);
     }
     if (data.IsActive !== undefined) {
       updates.push('IsActive = @IsActive');

@@ -3,38 +3,35 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, Loader2 } from 'lucide-react';
-import { CustomerMaster } from '../../../../types/customer';
-import { customerApi } from '../../../../lib/api/customerApi';
-import { CustomerFormModal } from '../../../../components/ui/CustomerFormModal';
+import { DealerMaster } from '../../../../types/dealer';
+import { dealerApi } from '../../../../lib/api/dealerApi';
 import { LocationMaster } from '../../../../types/location';
 import { locationApi } from '../../../../lib/api/locationApi';
-import { DealerMaster } from '../../../../types/dealer';
+import { DealerFormModal } from '../../../../components/ui/DealerFormModal';
 import toast, { Toaster } from 'react-hot-toast';
 
-export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerMaster[]>([]);
-  const [locations, setLocations] = useState<LocationMaster[]>([]);
+export default function DealersPage() {
   const [dealers, setDealers] = useState<DealerMaster[]>([]);
+  const [locations, setLocations] = useState<LocationMaster[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<CustomerMaster | null>(null);
+  const [editingDealer, setEditingDealer] = useState<DealerMaster | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadCustomers();
-    loadLocations();
     loadDealers();
+    loadLocations();
   }, []);
 
-  const loadCustomers = async () => {
+  const loadDealers = async () => {
     try {
       setLoading(true);
-      const data = await customerApi.getAllCustomers();
-      setCustomers(data);
+      const data = await dealerApi.getAllDealers();
+      setDealers(data);
     } catch (error) {
-      toast.error('Failed to load customers');
-      console.error('Error loading customers:', error);
+      toast.error('Failed to load dealers');
+      console.error('Error loading dealers:', error);
     } finally {
       setLoading(false);
     }
@@ -49,56 +46,46 @@ export default function CustomersPage() {
     }
   };
 
-  const loadDealers = async () => {
-    try {
-      const { dealerApi } = await import('../../../../lib/api/dealerApi');
-      const data = await dealerApi.getAllDealers();
-      setDealers(data);
-    } catch (error) {
-      console.error('Error loading dealers:', error);
-    }
-  };
-
   const handleCreate = async (data: any) => {
     setSubmitting(true);
     try {
-      await customerApi.createCustomer(data);
-      toast.success('Customer created successfully');
-      await loadCustomers();
+      await dealerApi.createDealer(data);
+      toast.success('Dealer created successfully');
+      await loadDealers();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create customer');
-      console.error('Error creating customer:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create dealer');
+      console.error('Error creating dealer:', error);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleUpdate = async (data: any) => {
-    if (!editingCustomer) return;
+    if (!editingDealer) return;
 
     setSubmitting(true);
     try {
-      await customerApi.updateCustomer(editingCustomer.CustomerId, data);
-      toast.success('Customer updated successfully');
-      await loadCustomers();
+      await dealerApi.updateDealer(editingDealer.DealerId, data);
+      toast.success('Dealer updated successfully');
+      await loadDealers();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update customer');
-      console.error('Error updating customer:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update dealer');
+      console.error('Error updating dealer:', error);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this customer?')) return;
+    if (!confirm('Are you sure you want to delete this dealer?')) return;
 
     try {
-      await customerApi.deleteCustomer(id);
-      toast.success('Customer deleted successfully');
-      await loadCustomers();
+      await dealerApi.deleteDealer(id);
+      toast.success('Dealer deleted successfully');
+      await loadDealers();
     } catch (error) {
-      toast.error('Failed to delete customer');
-      console.error('Error deleting customer:', error);
+      toast.error('Failed to delete dealer');
+      console.error('Error deleting dealer:', error);
     }
   };
 
@@ -109,29 +96,41 @@ export default function CustomersPage() {
 
   const getParentDealerName = (parentDealerId: number | null) => {
     if (!parentDealerId) return '-';
-    const dealer = dealers.find(d => d.DealerId === parentDealerId);
-    return dealer ? dealer.DealerName : `Dealer ${parentDealerId}`;
+    const parent = dealers.find(d => d.DealerId === parentDealerId);
+    return parent ? parent.DealerName : 'Unknown Dealer';
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.CustomerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (customer.Location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getParentDealerName(customer.ParentDealerId).toLowerCase().includes(searchTerm.toLowerCase())
+  const getImageSrc = (imageData: string | null) => {
+    if (!imageData) return null;
+    
+    // If already has data URI prefix, return as-is
+    if (imageData.startsWith('data:')) {
+      return imageData;
+    }
+    
+    // Otherwise, add the base64 prefix
+    return `data:image/jpeg;base64,${imageData}`;
+  };
+
+  const filteredDealers = dealers.filter(dealer =>
+    dealer.DealerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    dealer.DealerType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getLocationName(dealer.LocationId).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const openCreateModal = () => {
-    setEditingCustomer(null);
+    setEditingDealer(null);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (customer: CustomerMaster) => {
-    setEditingCustomer(customer);
+  const openEditModal = (dealer: DealerMaster) => {
+    setEditingDealer(dealer);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setEditingCustomer(null);
+    setEditingDealer(null);
   };
 
   if (loading) {
@@ -147,15 +146,15 @@ export default function CustomersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Customers Master</h1>
-          <p className="text-gray-600">Manage customers and their information</p>
+          <h1 className="text-2xl font-bold text-gray-900">Dealers Master</h1>
+          <p className="text-gray-600">Manage dealers and their information</p>
         </div>
         <button
           onClick={openCreateModal}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add Customer
+          Add Dealer
         </button>
       </div>
 
@@ -165,7 +164,7 @@ export default function CustomersPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search customers..."
+            placeholder="Search dealers..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -183,11 +182,12 @@ export default function CustomersPage() {
                   ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer Name
+                  Dealer Name
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Parent Dealer
+                  Type
                 </th>
+               
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Location
                 </th>
@@ -200,47 +200,48 @@ export default function CustomersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-              
+          
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCustomers.length === 0 ? (
+              {filteredDealers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
-                    {searchTerm ? 'No customers found matching your search.' : 'No customers found.'}
+                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                    {searchTerm ? 'No dealers found matching your search.' : 'No dealers found.'}
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((customer) => (
+                filteredDealers.map((dealer) => (
                   <motion.tr
-                    key={customer.CustomerId}
+                    key={dealer.DealerId}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="hover:bg-gray-50"
                   >
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {customer.CustomerId}
+                      {dealer.DealerId}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {customer.CustomerName}
+                      {dealer.DealerName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getParentDealerName(customer.ParentDealerId)}
+                      {dealer.DealerType}
                     </td>
+                   
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {customer.Location || '-'}
+                      {getLocationName(dealer.LocationId)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {customer.AadhaarImage ? (
+                      {dealer.AadhaarImage ? (
                         <img
-                          src={`data:image/jpeg;base64,${customer.AadhaarImage}`}
+                          src={getImageSrc(dealer.AadhaarImage)}
                           alt="Aadhaar"
                           className="w-12 h-12 object-cover rounded border"
                           onError={(e) => {
-                            console.error('Aadhaar image failed to load:', customer.AadhaarImage);
+                            console.error('Failed to load Aadhaar image for dealer:', dealer.DealerId);
                             e.currentTarget.style.display = 'none';
                           }}
                         />
@@ -249,13 +250,13 @@ export default function CustomersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {customer.PanImage ? (
+                      {dealer.PanImage ? (
                         <img
-                          src={`data:image/jpeg;base64,${customer.PanImage}`}
+                          src={getImageSrc(dealer.PanImage)}
                           alt="PAN"
                           className="w-12 h-12 object-cover rounded border"
                           onError={(e) => {
-                            console.error('PAN image failed to load:', customer.PanImage);
+                            console.error('Failed to load PAN image for dealer:', dealer.DealerId);
                             e.currentTarget.style.display = 'none';
                           }}
                         />
@@ -265,24 +266,24 @@ export default function CustomersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        customer.IsActive
+                        dealer.IsActive
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {customer.IsActive ? 'Active' : 'Inactive'}
+                        {dealer.IsActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    
+                 
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
-                          onClick={() => openEditModal(customer)}
+                          onClick={() => openEditModal(dealer)}
                           className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                    
+                      
                       </div>
                     </td>
                   </motion.tr>
@@ -293,14 +294,16 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Modal */}
-      <CustomerFormModal
+      {/* Dealer Form Modal */}
+      <DealerFormModal
         isOpen={isModalOpen}
         onClose={closeModal}
-        onSubmit={editingCustomer ? handleUpdate : handleCreate}
-        customer={editingCustomer}
+        onSubmit={editingDealer ? handleUpdate : handleCreate}
+        dealer={editingDealer}
         isLoading={submitting}
       />
+
+      <Toaster />
     </div>
   );
 }

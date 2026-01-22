@@ -2,10 +2,10 @@ export interface LocationMaster {
   LocationId: number;
   LocationName: string;
   LocationType: string;
-  CustomerId: number | null;
   Address: string | null;
-  City: string | null;
-  State: string | null;
+  Image: string | null;
+  Latitude: number | null;
+  Longitude: number | null;
   IsActive: boolean;
   CreatedAt: string;
 }
@@ -13,20 +13,20 @@ export interface LocationMaster {
 export interface CreateLocationRequest {
   LocationName: string;
   LocationType: string;
-  CustomerId?: number;
   Address?: string;
-  City?: string;
-  State?: string;
+  Image?: string;
+  Latitude?: number;
+  Longitude?: number;
   IsActive?: boolean;
 }
 
 export interface UpdateLocationRequest {
   LocationName?: string;
   LocationType?: string;
-  CustomerId?: number | null;
   Address?: string | null;
-  City?: string | null;
-  State?: string | null;
+  Image?: string | null;
+  Latitude?: number | null;
+  Longitude?: number | null;
   IsActive?: boolean;
 }
 

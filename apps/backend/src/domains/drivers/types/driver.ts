@@ -6,6 +6,9 @@ export interface DriverMaster {
   license_expiry_date: string;
   is_active: boolean;
   created_at: string;
+  AadhaarImage: Buffer | null;
+  PanImage: Buffer | null;
+  CreatedBy: number | null;
 }
 
 export interface CreateDriverRequest {
@@ -13,6 +16,9 @@ export interface CreateDriverRequest {
   mobile_number: string;
   license_number: string;
   license_expiry_date: string;
+  AadhaarImage?: Buffer | null;
+  PanImage?: Buffer | null;
+  CreatedBy?: number | null;
 }
 
 export interface UpdateDriverRequest {
@@ -21,4 +27,7 @@ export interface UpdateDriverRequest {
   license_number?: string;
   license_expiry_date?: string;
   is_active?: boolean;
+  AadhaarImage?: Buffer | null;
+  PanImage?: Buffer | null;
+  CreatedBy?: number | null;
 }

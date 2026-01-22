@@ -18,7 +18,7 @@ export function VehicleFormModal({ isOpen, onClose, vehicle, onSuccess }: Vehicl
   const [formData, setFormData] = useState({
     vehicle_number: '',
     vehicle_type: '',
-    max_cylinder_capacity: '',
+    capacity_tonnes: '',
     transporter_id: '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -30,14 +30,14 @@ export function VehicleFormModal({ isOpen, onClose, vehicle, onSuccess }: Vehicl
       setFormData({
         vehicle_number: vehicle.vehicle_number,
         vehicle_type: vehicle.vehicle_type,
-        max_cylinder_capacity: vehicle.max_cylinder_capacity.toString(),
+        capacity_tonnes: vehicle.capacity_tonnes.toString(),
         transporter_id: vehicle.transporter_id?.toString() || '',
       });
     } else {
       setFormData({
         vehicle_number: '',
         vehicle_type: '',
-        max_cylinder_capacity: '',
+        capacity_tonnes: '',
         transporter_id: '',
       });
     }
@@ -48,11 +48,11 @@ export function VehicleFormModal({ isOpen, onClose, vehicle, onSuccess }: Vehicl
     setIsLoading(true);
 
     try {
-      const maxCapacity = parseInt(formData.max_cylinder_capacity);
+      const capacityTonnes = parseFloat(formData.capacity_tonnes);
       const transporterId = formData.transporter_id ? parseInt(formData.transporter_id) : null;
 
-      if (isNaN(maxCapacity) || maxCapacity <= 0) {
-        toast.error('Max cylinder capacity must be a positive number');
+      if (isNaN(capacityTonnes) || capacityTonnes <= 0) {
+        toast.error('Capacity in tonnes must be a positive number');
         return;
       }
 
@@ -64,7 +64,7 @@ export function VehicleFormModal({ isOpen, onClose, vehicle, onSuccess }: Vehicl
       const requestData = {
         vehicle_number: formData.vehicle_number.trim(),
         vehicle_type: formData.vehicle_type.trim(),
-        max_cylinder_capacity: maxCapacity,
+        capacity_tonnes: capacityTonnes,
         transporter_id: transporterId,
       };
 
@@ -165,58 +165,39 @@ export function VehicleFormModal({ isOpen, onClose, vehicle, onSuccess }: Vehicl
                     <span>Vehicle Type *</span>
                   </div>
                 </label>
-                <select
+                <input
+                  type="text"
                   value={formData.vehicle_type}
                   onChange={(e) => handleInputChange('vehicle_type', e.target.value)}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="e.g., Heavy Duty Truck"
                   required
-                >
-                  <option value="">Select vehicle type</option>
-                  <option value="Truck">Truck</option>
-                  <option value="Van">Van</option>
-                  <option value="Pickup">Pickup</option>
-                  <option value="Trailer">Trailer</option>
-                  <option value="Bus">Bus</option>
-                  <option value="Other">Other</option>
-                </select>
+                  maxLength={50}
+                />
               </div>
 
-              {/* Max Cylinder Capacity */}
+              {/* Capacity in Tonnes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <div className="flex items-center space-x-2">
                     <Truck className="w-4 h-4 text-gray-500" />
-                    <span>Max Cylinder Capacity *</span>
+                    <span>Capacity (Tonnes) *</span>
                   </div>
                 </label>
                 <input
                   type="number"
-                  value={formData.max_cylinder_capacity}
-                  onChange={(e) => handleInputChange('max_cylinder_capacity', e.target.value)}
+                  value={formData.capacity_tonnes}
+                  onChange={(e) => handleInputChange('capacity_tonnes', e.target.value)}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="e.g., 100"
-                  min="1"
+                  placeholder="e.g., 5.5"
+                  min="0.1"
+                  step="0.1"
                   required
                 />
               </div>
 
               {/* Transporter ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <div className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-gray-500" />
-                    <span>Transporter ID (Optional)</span>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={formData.transporter_id}
-                  onChange={(e) => handleInputChange('transporter_id', e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="e.g., 1"
-                  min="1"
-                />
-              </div>
+         
 
               {/* Actions */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

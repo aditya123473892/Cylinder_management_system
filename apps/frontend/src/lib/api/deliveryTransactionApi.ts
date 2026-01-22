@@ -21,12 +21,21 @@ class DeliveryTransactionApiService {
         // Parse inventory error messages for better user experience
         let errorMessage = data.message || 'API request failed';
 
+        // Parse delivery inventory errors: "Insufficient FILLED cylinders available in YARD for cylinder type 3. Available: 10, Required: 80"
         if (errorMessage.includes('Insufficient') && errorMessage.includes('cylinders available')) {
-          // Parse inventory error: "Insufficient FILLED cylinders available in YARD for cylinder type 3. Available: 10, Required: 80"
           const match = errorMessage.match(/Insufficient (\w+) cylinders available in (\w+) for cylinder type (\d+)\. Available: (\d+), Required: (\d+)/);
           if (match) {
             const [, status, location, cylinderTypeId, available, required] = match;
             errorMessage = `Not enough ${status.toLowerCase()} cylinders available in ${location}. You requested ${required} but only ${available} are available. Please check your inventory or reduce the delivery quantity.`;
+          }
+        }
+
+        // Parse return validation errors: "Customer does not have enough EMPTY cylinders to return for cylinder type 2. Available: 0, Required: 3"
+        if (errorMessage.includes('does not have enough') && errorMessage.includes('cylinders to return')) {
+          const match = errorMessage.match(/Customer does not have enough (\w+) cylinders to return for cylinder type (\d+)\. Available: (\d+), Required: (\d+)/);
+          if (match) {
+            const [, status, cylinderTypeId, available, required] = match;
+            errorMessage = `Customer doesn't have enough ${status.toLowerCase()} cylinders to return. You requested to return ${required} cylinders but they only have ${available} available. Please check the customer's current inventory or adjust the return quantity.`;
           }
         }
 

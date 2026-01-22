@@ -152,9 +152,6 @@ export default function CylinderTypesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Height (CM)
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Manufacturing Date
-                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -163,7 +160,7 @@ export default function CylinderTypesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredCylinderTypes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                     {searchTerm ? 'No cylinder types found matching your search.' : 'No cylinder types found.'}
                   </td>
                 </tr>
@@ -192,12 +189,6 @@ export default function CylinderTypesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cylinderType.HeightCM || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cylinderType.ManufacturingDate
-                        ? new Date(cylinderType.ManufacturingDate).toLocaleDateString()
-                        : '-'
-                      }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">

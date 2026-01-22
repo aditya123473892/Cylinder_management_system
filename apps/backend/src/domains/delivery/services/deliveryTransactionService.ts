@@ -100,16 +100,16 @@ export class DeliveryTransactionService {
           }
         }
 
-        // Validate return availability (customer must have empty cylinders to return)
+        // Validate return availability (customer must have cylinders to return, which will be considered empty)
         if (line.returned_qty > 0) {
-          const availableEmpty = await this.inventoryService.getAvailableQuantity(
+          const availableFilled = await this.inventoryService.getAvailableQuantity(
             line.cylinder_type_id,
             'CUSTOMER',
             data.customer_id,
-            'EMPTY'
+            'FILLED'
           );
-          if (availableEmpty < line.returned_qty) {
-            throw new Error(`Customer does not have enough EMPTY cylinders to return for cylinder type ${line.cylinder_type_id}. Available: ${availableEmpty}, Required: ${line.returned_qty}`);
+          if (availableFilled < line.returned_qty) {
+            throw new Error(`Customer does not have enough cylinders to return for cylinder type ${line.cylinder_type_id}. Available: ${availableFilled}, Required: ${line.returned_qty}`);
           }
         }
       }

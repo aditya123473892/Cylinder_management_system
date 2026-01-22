@@ -1,31 +1,31 @@
 import { Request, Response } from 'express';
-import { CustomerService } from '../services/customerService';
-import { CreateCustomerRequest, UpdateCustomerRequest } from '../types/customer';
+import { DealerService } from '../services/dealerService';
+import { CreateDealerRequest, UpdateDealerRequest } from '../types/dealer';
 
-export class CustomerController {
-  private service: CustomerService;
+export class DealerController {
+  private service: DealerService;
 
   constructor() {
-    this.service = new CustomerService();
+    this.service = new DealerService();
   }
 
-  async getAllCustomers(req: Request, res: Response): Promise<void> {
+  async getAllDealers(req: Request, res: Response): Promise<void> {
     try {
-      const customers = await this.service.getAllCustomers();
+      const dealers = await this.service.getAllDealers();
       // Convert binary images to base64 for frontend
-      const customersWithBase64 = customers.map(customer => ({
-        ...customer,
-        AadhaarImage: customer.AadhaarImage ? customer.AadhaarImage.toString('base64') : null,
-        PanImage: customer.PanImage ? customer.PanImage.toString('base64') : null,
+      const dealersWithBase64 = dealers.map(dealer => ({
+        ...dealer,
+        AadhaarImage: dealer.AadhaarImage ? dealer.AadhaarImage.toString('base64') : null,
+        PanImage: dealer.PanImage ? dealer.PanImage.toString('base64') : null,
       }));
 
       res.status(200).json({
         success: true,
-        data: customersWithBase64,
-        message: 'Customers retrieved successfully'
+        data: dealersWithBase64,
+        message: 'Dealers retrieved successfully'
       });
     } catch (error) {
-      console.error('Error in getAllCustomers:', error);
+      console.error('Error in getAllDealers:', error);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Internal server error'
@@ -33,40 +33,40 @@ export class CustomerController {
     }
   }
 
-  async getCustomerById(req: Request, res: Response): Promise<void> {
+  async getDealerById(req: Request, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
           success: false,
-          message: 'Invalid customer ID'
+          message: 'Invalid dealer ID'
         });
         return;
       }
 
-      const customer = await this.service.getCustomerById(id);
-      if (!customer) {
+      const dealer = await this.service.getDealerById(id);
+      if (!dealer) {
         res.status(404).json({
           success: false,
-          message: 'Customer not found'
+          message: 'Dealer not found'
         });
         return;
       }
 
       // Convert binary images to base64 for frontend
-      const customerWithBase64 = {
-        ...customer,
-        AadhaarImage: customer.AadhaarImage ? customer.AadhaarImage.toString('base64') : null,
-        PanImage: customer.PanImage ? customer.PanImage.toString('base64') : null,
+      const dealerWithBase64 = {
+        ...dealer,
+        AadhaarImage: dealer.AadhaarImage ? dealer.AadhaarImage.toString('base64') : null,
+        PanImage: dealer.PanImage ? dealer.PanImage.toString('base64') : null,
       };
 
       res.status(200).json({
         success: true,
-        data: customerWithBase64,
-        message: 'Customer retrieved successfully'
+        data: dealerWithBase64,
+        message: 'Dealer retrieved successfully'
       });
     } catch (error) {
-      console.error('Error in getCustomerById:', error);
+      console.error('Error in getDealerById:', error);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Internal server error'
@@ -74,9 +74,9 @@ export class CustomerController {
     }
   }
 
-  async createCustomer(req: Request, res: Response): Promise<void> {
+  async createDealer(req: Request, res: Response): Promise<void> {
     try {
-      const data: CreateCustomerRequest = req.body;
+      const data: CreateDealerRequest = req.body;
 
       // Convert base64 images to Buffer if provided
       if (data.AadhaarImage && typeof data.AadhaarImage === 'string') {
@@ -90,22 +90,22 @@ export class CustomerController {
         data.PanImage = Buffer.from(cleanBase64, 'base64');
       }
 
-      const customer = await this.service.createCustomer(data);
+      const dealer = await this.service.createDealer(data);
 
       // Convert binary images to base64 for response
-      const customerWithBase64 = {
-        ...customer,
-        AadhaarImage: customer.AadhaarImage ? customer.AadhaarImage.toString('base64') : null,
-        PanImage: customer.PanImage ? customer.PanImage.toString('base64') : null,
+      const dealerWithBase64 = {
+        ...dealer,
+        AadhaarImage: dealer.AadhaarImage ? dealer.AadhaarImage.toString('base64') : null,
+        PanImage: dealer.PanImage ? dealer.PanImage.toString('base64') : null,
       };
 
       res.status(201).json({
         success: true,
-        data: customerWithBase64,
-        message: 'Customer created successfully'
+        data: dealerWithBase64,
+        message: 'Dealer created successfully'
       });
     } catch (error) {
-      console.error('Error in createCustomer:', error);
+      console.error('Error in createDealer:', error);
       const statusCode = error instanceof Error && error.message.includes('required') ? 400 : 500;
       res.status(statusCode).json({
         success: false,
@@ -114,18 +114,18 @@ export class CustomerController {
     }
   }
 
-  async updateCustomer(req: Request, res: Response): Promise<void> {
+  async updateDealer(req: Request, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
           success: false,
-          message: 'Invalid customer ID'
+          message: 'Invalid dealer ID'
         });
         return;
       }
 
-      const data: UpdateCustomerRequest = req.body;
+      const data: UpdateDealerRequest = req.body;
 
       // Convert base64 images to Buffer if provided
       if (data.AadhaarImage && typeof data.AadhaarImage === 'string') {
@@ -139,30 +139,30 @@ export class CustomerController {
         data.PanImage = Buffer.from(cleanBase64, 'base64');
       }
 
-      const customer = await this.service.updateCustomer(id, data);
+      const dealer = await this.service.updateDealer(id, data);
 
-      if (!customer) {
+      if (!dealer) {
         res.status(404).json({
           success: false,
-          message: 'Customer not found'
+          message: 'Dealer not found'
         });
         return;
       }
 
       // Convert binary images to base64 for response
-      const customerWithBase64 = {
-        ...customer,
-        AadhaarImage: customer.AadhaarImage ? customer.AadhaarImage.toString('base64') : null,
-        PanImage: customer.PanImage ? customer.PanImage.toString('base64') : null,
+      const dealerWithBase64 = {
+        ...dealer,
+        AadhaarImage: dealer.AadhaarImage ? dealer.AadhaarImage.toString('base64') : null,
+        PanImage: dealer.PanImage ? dealer.PanImage.toString('base64') : null,
       };
 
       res.status(200).json({
         success: true,
-        data: customerWithBase64,
-        message: 'Customer updated successfully'
+        data: dealerWithBase64,
+        message: 'Dealer updated successfully'
       });
     } catch (error) {
-      console.error('Error in updateCustomer:', error);
+      console.error('Error in updateDealer:', error);
       const statusCode = error instanceof Error &&
         (error.message.includes('not found') || error.message.includes('Invalid')) ? 400 : 500;
       res.status(statusCode).json({
@@ -172,32 +172,32 @@ export class CustomerController {
     }
   }
 
-  async deleteCustomer(req: Request, res: Response): Promise<void> {
+  async deleteDealer(req: Request, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
           success: false,
-          message: 'Invalid customer ID'
+          message: 'Invalid dealer ID'
         });
         return;
       }
 
-      const deleted = await this.service.deleteCustomer(id);
+      const deleted = await this.service.deleteDealer(id);
       if (!deleted) {
         res.status(404).json({
           success: false,
-          message: 'Customer not found'
+          message: 'Dealer not found'
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        message: 'Customer deleted successfully'
+        message: 'Dealer deleted successfully'
       });
     } catch (error) {
-      console.error('Error in deleteCustomer:', error);
+      console.error('Error in deleteDealer:', error);
       const statusCode = error instanceof Error &&
         (error.message.includes('not found') || error.message.includes('Invalid')) ? 400 : 500;
       res.status(statusCode).json({

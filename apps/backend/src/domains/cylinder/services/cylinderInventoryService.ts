@@ -138,8 +138,8 @@ export class CylinderInventoryService {
         break;
 
       case 'RETURN_EMPTY':
-        if (movement.fromLocation.status !== 'EMPTY' || movement.toLocation.status !== 'EMPTY') {
-          errors.push('RETURN_EMPTY requires EMPTY status at both locations');
+        if (movement.fromLocation.status !== 'FILLED' || movement.toLocation.status !== 'EMPTY') {
+          errors.push('RETURN_EMPTY requires FILLED→EMPTY status change');
         }
         if (movement.fromLocation.type !== 'CUSTOMER' && movement.fromLocation.type !== 'VEHICLE') {
           errors.push('RETURN_EMPTY source must be CUSTOMER or VEHICLE');
@@ -262,12 +262,12 @@ export class CylinderInventoryService {
       });
     }
 
-    // Process returns: CUSTOMER EMPTY → PLANT EMPTY
+    // Process returns: CUSTOMER FILLED → PLANT EMPTY (returned cylinders are considered empty)
     if (returnedQty > 0) {
       movements.push({
         cylinderTypeId,
         quantity: returnedQty,
-        fromLocation: { type: 'CUSTOMER', referenceId: customerId, status: 'EMPTY' },
+        fromLocation: { type: 'CUSTOMER', referenceId: customerId, status: 'FILLED' },
         toLocation: { type: 'PLANT', status: 'EMPTY' },
         movementType: 'RETURN_EMPTY',
         referenceTransactionId: transactionId,

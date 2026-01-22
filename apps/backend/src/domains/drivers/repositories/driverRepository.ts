@@ -10,11 +10,19 @@ export class DriverRepository {
   async findAll(): Promise<DriverMaster[]> {
     const pool = await this.getPool();
     const result = await pool.request().query(`
-      SELECT driver_id, driver_name, mobile_number, license_number, license_expiry_date, is_active, created_at
+      SELECT driver_id, driver_name, mobile_number, license_number, license_expiry_date, is_active, created_at, AadhaarImage, PanImage, CreatedBy
       FROM dbo.DRIVER_MASTER
       ORDER BY driver_id
     `);
-    return result.recordset;
+
+    // Convert Buffer objects to base64 strings
+    const records = result.recordset.map((record: any) => ({
+      ...record,
+      AadhaarImage: record.AadhaarImage ? record.AadhaarImage.toString('base64') : null,
+      PanImage: record.PanImage ? record.PanImage.toString('base64') : null,
+    }));
+
+    return records;
   }
 
   async findById(id: number): Promise<DriverMaster | null> {
@@ -22,27 +30,51 @@ export class DriverRepository {
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        SELECT driver_id, driver_name, mobile_number, license_number, license_expiry_date, is_active, created_at
+        SELECT driver_id, driver_name, mobile_number, license_number, license_expiry_date, is_active, created_at, AadhaarImage, PanImage, CreatedBy
         FROM dbo.DRIVER_MASTER
         WHERE driver_id = @id
       `);
-    return result.recordset.length > 0 ? result.recordset[0] : null;
+
+    if (result.recordset.length === 0) return null;
+
+    // Convert Buffer objects to base64 strings
+    const record = result.recordset[0];
+    return {
+      ...record,
+      AadhaarImage: record.AadhaarImage ? record.AadhaarImage.toString('base64') : null,
+      PanImage: record.PanImage ? record.PanImage.toString('base64') : null,
+    };
   }
 
   async create(data: CreateDriverRequest): Promise<DriverMaster> {
     const pool = await this.getPool();
+
+    // Convert base64 strings to Buffers for database storage
+    const aadhaarBuffer = data.AadhaarImage ? Buffer.from(data.AadhaarImage.toString(), 'base64') : null;
+    const panBuffer = data.PanImage ? Buffer.from(data.PanImage.toString(), 'base64') : null;
+
     const result = await pool.request()
       .input('driver_name', sql.VarChar(100), data.driver_name)
       .input('mobile_number', sql.VarChar(15), data.mobile_number)
       .input('license_number', sql.VarChar(50), data.license_number)
       .input('license_expiry_date', sql.Date, new Date(data.license_expiry_date))
       .input('is_active', sql.Bit, true)
+      .input('AadhaarImage', sql.VarBinary(sql.MAX), aadhaarBuffer)
+      .input('PanImage', sql.VarBinary(sql.MAX), panBuffer)
+      .input('CreatedBy', sql.Int, data.CreatedBy ?? null)
       .query(`
-        INSERT INTO dbo.DRIVER_MASTER (driver_name, mobile_number, license_number, license_expiry_date, is_active)
+        INSERT INTO dbo.DRIVER_MASTER (driver_name, mobile_number, license_number, license_expiry_date, is_active, AadhaarImage, PanImage, CreatedBy)
         OUTPUT INSERTED.*
-        VALUES (@driver_name, @mobile_number, @license_number, @license_expiry_date, @is_active)
+        VALUES (@driver_name, @mobile_number, @license_number, @license_expiry_date, @is_active, @AadhaarImage, @PanImage, @CreatedBy)
       `);
-    return result.recordset[0];
+
+    // Convert the returned Buffer back to base64 for the frontend
+    const record = result.recordset[0];
+    return {
+      ...record,
+      AadhaarImage: record.AadhaarImage ? record.AadhaarImage.toString('base64') : null,
+      PanImage: record.PanImage ? record.PanImage.toString('base64') : null,
+    };
   }
 
   async update(id: number, data: UpdateDriverRequest): Promise<DriverMaster | null> {
@@ -70,6 +102,20 @@ export class DriverRepository {
     if (data.is_active !== undefined) {
       updates.push('is_active = @is_active');
       request.input('is_active', sql.Bit, data.is_active);
+    }
+    if (data.AadhaarImage !== undefined) {
+      updates.push('AadhaarImage = @AadhaarImage');
+      const aadhaarBuffer = data.AadhaarImage ? Buffer.from(data.AadhaarImage.toString(), 'base64') : null;
+      request.input('AadhaarImage', sql.VarBinary(sql.MAX), aadhaarBuffer);
+    }
+    if (data.PanImage !== undefined) {
+      updates.push('PanImage = @PanImage');
+      const panBuffer = data.PanImage ? Buffer.from(data.PanImage.toString(), 'base64') : null;
+      request.input('PanImage', sql.VarBinary(sql.MAX), panBuffer);
+    }
+    if (data.CreatedBy !== undefined) {
+      updates.push('CreatedBy = @CreatedBy');
+      request.input('CreatedBy', sql.Int, data.CreatedBy);
     }
 
     if (updates.length === 0) {

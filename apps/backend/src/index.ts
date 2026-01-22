@@ -5,6 +5,7 @@ import cylinderTypeRoutes from './domains/cylinder/routes/cylinderTypeRoutes';
 import cylinderInventoryRoutes from './domains/cylinder/routes/cylinderInventoryRoutes';
 import locationRoutes from './domains/locations/routes/locationRoutes';
 import customerRoutes from './domains/customer/routes/customerRoutes';
+import dealerRoutes from './domains/sub-dealer/routes/dealerRoutes';
 import vehicleRoutes from './domains/vehicles/routes/vehicleRoutes';
 import driverRoutes from './domains/drivers/routes/driverRoutes';
 import rateContractRoutes from './domains/rate-contract/routes/rateContractRoutes';
@@ -22,7 +23,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Initialize database connection
 connectDB().then(async (pool) => {
@@ -76,6 +78,9 @@ app.use('/api/locations', locationRoutes);
 
 // Customer routes
 app.use('/api/customers', customerRoutes);
+
+// Dealer routes
+app.use('/api/dealers', dealerRoutes);
 
 // Vehicle routes
 app.use('/api/vehicles', vehicleRoutes);

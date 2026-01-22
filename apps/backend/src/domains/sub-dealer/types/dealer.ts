@@ -1,8 +1,9 @@
-export interface CustomerMaster {
-  CustomerId: number;
-  CustomerName: string;
+export interface DealerMaster {
+  DealerId: number;
+  DealerName: string;
+  DealerType: string;
   ParentDealerId: number | null;
-  Location: string;
+  LocationId: number;
   IsActive: boolean;
   AadhaarImage: Buffer | null;
   PanImage: Buffer | null;
@@ -10,20 +11,22 @@ export interface CustomerMaster {
   CreatedBy: number | null;
 }
 
-export interface CreateCustomerRequest {
-  CustomerName: string;
+export interface CreateDealerRequest {
+  DealerName: string;
+  DealerType: string;
   ParentDealerId?: number | null;
-  Location: string;
+  LocationId: number;
   AadhaarImage?: Buffer | null;
   PanImage?: Buffer | null;
   IsActive?: boolean;
   CreatedBy?: number | null;
 }
 
-export interface UpdateCustomerRequest {
-  CustomerName?: string;
+export interface UpdateDealerRequest {
+  DealerName?: string;
+  DealerType?: string;
   ParentDealerId?: number | null;
-  Location?: string;
+  LocationId?: number;
   AadhaarImage?: Buffer | null;
   PanImage?: Buffer | null;
   IsActive?: boolean;
