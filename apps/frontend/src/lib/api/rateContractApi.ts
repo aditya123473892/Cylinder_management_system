@@ -44,15 +44,29 @@ class RateContractApiService {
     return response.data;
   }
 
-  async getActiveRateContracts(customerType: string, cylinderTypeId: number, effectiveDate: string): Promise<RateContractMaster[]> {
-    const params = new URLSearchParams({
-      customerType,
-      cylinderTypeId: cylinderTypeId.toString(),
-      effectiveDate,
-    });
+  async getActiveRateContracts(customerId?: number, dealerId?: number, effectiveDate?: string): Promise<RateContractMaster[]> {
+    const params = new URLSearchParams();
+    if (customerId) params.append('customerId', customerId.toString());
+    if (dealerId) params.append('dealerId', dealerId.toString());
+    if (effectiveDate) params.append('effectiveDate', effectiveDate);
+
     const response = await this.request<RateContractMaster[]>(`/api/rate-contracts/active?${params}`);
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Failed to fetch active rate contracts');
+    }
+    return response.data;
+  }
+
+  async getActiveRateForCylinder(customerId?: number, dealerId?: number, cylinderTypeId?: number, effectiveDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (customerId) params.append('customerId', customerId.toString());
+    if (dealerId) params.append('dealerId', dealerId.toString());
+    if (cylinderTypeId) params.append('cylinderTypeId', cylinderTypeId.toString());
+    if (effectiveDate) params.append('effectiveDate', effectiveDate);
+
+    const response = await this.request<any>(`/api/rate-contracts/active-rate?${params}`);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to fetch active rate for cylinder');
     }
     return response.data;
   }

@@ -2,67 +2,92 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, FileText, Users, Package, DollarSign, Calendar, CheckCircle, AlertTriangle } from 'lucide-react';
-import { RateContractMaster, CreateRateContractRequest, UpdateRateContractRequest } from '../../types/rateContract';
+import { X, Save, FileText, Users, Package, DollarSign, Calendar, CheckCircle, AlertTriangle, User, Building } from 'lucide-react';
+import { RateContractMaster, CreateRateContractRequest, UpdateRateContractRequest, RateContractDetail } from '../../types/rateContract';
 import { rateContractApi } from '../../lib/api/rateContractApi';
 import { cylinderTypeApi } from '../../lib/api/cylinderTypeApi';
+import { customerApi } from '../../lib/api/customerApi';
+import { dealerApi } from '../../lib/api/dealerApi';
 import { CylinderTypeMaster } from '../../types/cylinderType';
+import { CustomerMaster } from '../../types/customer';
+import { DealerMaster } from '../../types/dealer';
 import toast from 'react-hot-toast';
 
 interface RateContractFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   rateContract?: RateContractMaster | null;
+  selectedCompany?: { id: number; name: string; type: 'customer' | 'dealer' } | null;
   onSuccess: () => void;
 }
 
-export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess }: RateContractFormModalProps) {
+export function RateContractFormModal({ isOpen, onClose, rateContract, selectedCompany, onSuccess }: RateContractFormModalProps) {
   const [formData, setFormData] = useState({
     contract_name: '',
-    customer_type: 'DIRECT' as 'DIRECT' | 'SUB_DEALER' | 'ALL',
-    cylinder_type_id: '',
-    rate_per_cylinder: '',
+    entity_type: 'customer' as 'customer' | 'dealer',
+    entity_id: '',
     valid_from: '',
     valid_to: '',
   });
+
+  const [rates, setRates] = useState<RateContractDetail[]>([]);
   const [cylinderTypes, setCylinderTypes] = useState<CylinderTypeMaster[]>([]);
+  const [customers, setCustomers] = useState<CustomerMaster[]>([]);
+  const [dealers, setDealers] = useState<DealerMaster[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const isEditing = !!rateContract;
 
   useEffect(() => {
-    fetchCylinderTypes();
+    fetchData();
   }, []);
 
   useEffect(() => {
     if (rateContract) {
+      const entityType = rateContract.customer_id ? 'customer' : 'dealer';
       setFormData({
         contract_name: rateContract.contract_name,
-        customer_type: rateContract.customer_type,
-        cylinder_type_id: rateContract.cylinder_type_id.toString(),
-        rate_per_cylinder: rateContract.rate_per_cylinder.toString(),
+        entity_type: entityType,
+        entity_id: (rateContract.customer_id || rateContract.dealer_id || '').toString(),
         valid_from: rateContract.valid_from.split('T')[0],
         valid_to: rateContract.valid_to.split('T')[0],
       });
-    } else {
+      setRates([...rateContract.rates]);
+    } else if (selectedCompany) {
+      // Pre-fill form when creating contract for a specific company
       setFormData({
-        contract_name: '',
-        customer_type: 'DIRECT',
-        cylinder_type_id: '',
-        rate_per_cylinder: '',
+        contract_name: `${selectedCompany.name} Contract`,
+        entity_type: selectedCompany.type,
+        entity_id: selectedCompany.id.toString(),
         valid_from: '',
         valid_to: '',
       });
+      setRates([]);
+    } else {
+      setFormData({
+        contract_name: '',
+        entity_type: 'customer',
+        entity_id: '',
+        valid_from: '',
+        valid_to: '',
+      });
+      setRates([]);
     }
-  }, [rateContract, isOpen]);
+  }, [rateContract, selectedCompany, isOpen]);
 
-  const fetchCylinderTypes = async () => {
+  const fetchData = async () => {
     try {
-      const data = await cylinderTypeApi.getAllCylinderTypes();
-      setCylinderTypes(data);
+      const [cylinderData, customerData, dealerData] = await Promise.all([
+        cylinderTypeApi.getAllCylinderTypes(),
+        customerApi.getAllCustomers(),
+        dealerApi.getAllDealers()
+      ]);
+      setCylinderTypes(cylinderData);
+      setCustomers(customerData);
+      setDealers(dealerData);
     } catch (error) {
-      console.error('Error fetching cylinder types:', error);
-      toast.error('Failed to load cylinder types');
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load required data');
     }
   };
 
@@ -71,11 +96,28 @@ export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess
     setIsLoading(true);
 
     try {
-      const ratePerCylinder = parseFloat(formData.rate_per_cylinder);
-
-      if (isNaN(ratePerCylinder) || ratePerCylinder <= 0) {
-        toast.error('Rate per cylinder must be a positive number');
+      // Validate required fields
+      if (!formData.contract_name.trim()) {
+        toast.error('Contract name is required');
         return;
+      }
+
+      if (!formData.entity_id) {
+        toast.error('Please select a customer or dealer');
+        return;
+      }
+
+      // Validate rates
+      if (rates.length === 0) {
+        toast.error('At least one rate must be specified');
+        return;
+      }
+
+      for (const rate of rates) {
+        if (!rate.rate_per_cylinder || rate.rate_per_cylinder <= 0) {
+          toast.error('All rates must be positive numbers');
+          return;
+        }
       }
 
       // Validate date range
@@ -96,9 +138,8 @@ export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess
 
       const requestData = {
         contract_name: formData.contract_name.trim(),
-        customer_type: formData.customer_type,
-        cylinder_type_id: parseInt(formData.cylinder_type_id),
-        rate_per_cylinder: ratePerCylinder,
+        [formData.entity_type === 'customer' ? 'customer_id' : 'dealer_id']: parseInt(formData.entity_id),
+        rates: rates,
         valid_from: formData.valid_from,
         valid_to: formData.valid_to,
       };
@@ -126,11 +167,51 @@ export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess
       ...prev,
       [field]: value
     }));
+
+    // Reset entity selection when changing type
+    if (field === 'entity_type') {
+      setFormData(prev => ({
+        ...prev,
+        entity_id: ''
+      }));
+    }
+  };
+
+  const handleRateChange = (cylinderTypeId: number, rateValue: string) => {
+    const rate = parseFloat(rateValue) || 0;
+    setRates(prev => {
+      const existing = prev.find(r => r.cylinder_type_id === cylinderTypeId);
+      if (existing) {
+        return prev.map(r =>
+          r.cylinder_type_id === cylinderTypeId
+            ? { ...r, rate_per_cylinder: rate }
+            : r
+        );
+      } else {
+        return [...prev, { cylinder_type_id: cylinderTypeId, rate_per_cylinder: rate }];
+      }
+    });
   };
 
   const getCylinderTypeName = (cylinderTypeId: number) => {
     const cylinderType = cylinderTypes.find(ct => ct.CylinderTypeId === cylinderTypeId);
     return cylinderType ? cylinderType.Capacity : 'Unknown';
+  };
+
+  const getEntityOptions = () => {
+    if (formData.entity_type === 'customer') {
+      return customers.filter(c => c.IsActive);
+    } else {
+      return dealers.filter(d => d.IsActive);
+    }
+  };
+
+  const getSelectedEntityName = () => {
+    if (!formData.entity_id) return '';
+    const entity = getEntityOptions().find(e =>
+      (formData.entity_type === 'customer' ? (e as CustomerMaster).CustomerId : (e as DealerMaster).DealerId) === parseInt(formData.entity_id)
+    );
+    return entity ? (formData.entity_type === 'customer' ? (entity as CustomerMaster).CustomerName : (entity as DealerMaster).DealerName) : '';
   };
 
   return (
@@ -191,73 +272,120 @@ export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess
                   value={formData.contract_name}
                   onChange={(e) => handleInputChange('contract_name', e.target.value)}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="e.g., Standard Direct Customer Rate"
+                  placeholder="e.g., Standard Customer Rate Contract"
                   required
                   maxLength={100}
                 />
               </div>
 
-              {/* Customer Type */}
+              {/* Entity Type Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <div className="flex items-center space-x-2">
                     <Users className="w-4 h-4 text-gray-500" />
-                    <span>Customer Type *</span>
+                    <span>Apply to *</span>
                   </div>
                 </label>
-                <select
-                  value={formData.customer_type}
-                  onChange={(e) => handleInputChange('customer_type', e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  required
-                >
-                  <option value="DIRECT">Direct Customer</option>
-                  <option value="SUB_DEALER">Sub-dealer</option>
-                  <option value="ALL">All Customers</option>
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('entity_type', 'customer')}
+                    className={`p-3 border rounded-lg flex items-center space-x-2 transition-all ${
+                      formData.entity_type === 'customer'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="text-sm font-medium">Customer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('entity_type', 'dealer')}
+                    className={`p-3 border rounded-lg flex items-center space-x-2 transition-all ${
+                      formData.entity_type === 'dealer'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <Building className="w-4 h-4" />
+                    <span className="text-sm font-medium">Dealer</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Cylinder Type */}
+              {/* Entity Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <div className="flex items-center space-x-2">
-                    <Package className="w-4 h-4 text-gray-500" />
-                    <span>Cylinder Type *</span>
+                    {formData.entity_type === 'customer' ? <User className="w-4 h-4 text-gray-500" /> : <Building className="w-4 h-4 text-gray-500" />}
+                    <span>Select {formData.entity_type === 'customer' ? 'Customer' : 'Dealer'} *</span>
                   </div>
                 </label>
                 <select
-                  value={formData.cylinder_type_id}
-                  onChange={(e) => handleInputChange('cylinder_type_id', e.target.value)}
+                  value={formData.entity_id}
+                  onChange={(e) => handleInputChange('entity_id', e.target.value)}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
                 >
-                  <option value="">Select cylinder type</option>
-                  {cylinderTypes.map((type) => (
-                    <option key={type.CylinderTypeId} value={type.CylinderTypeId}>
-                      {type.Capacity}
+                  <option value="">
+                    Select {formData.entity_type === 'customer' ? 'customer' : 'dealer'}...
+                  </option>
+                  {getEntityOptions().map((entity) => (
+                    <option
+                      key={formData.entity_type === 'customer' ? (entity as CustomerMaster).CustomerId : (entity as DealerMaster).DealerId}
+                      value={formData.entity_type === 'customer' ? (entity as CustomerMaster).CustomerId : (entity as DealerMaster).DealerId}
+                    >
+                      {formData.entity_type === 'customer' ? (entity as CustomerMaster).CustomerName : (entity as DealerMaster).DealerName}
                     </option>
                   ))}
                 </select>
+                {getSelectedEntityName() && (
+                  <div className="mt-2 flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-600">Selected: {getSelectedEntityName()}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Rate per Cylinder */}
+              {/* Rates for Each Cylinder Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
                   <div className="flex items-center space-x-2">
                     <DollarSign className="w-4 h-4 text-gray-500" />
-                    <span>Rate per Cylinder (₹) *</span>
+                    <span>Rates per Cylinder Type *</span>
                   </div>
                 </label>
-                <input
-                  type="number"
-                  value={formData.rate_per_cylinder}
-                  onChange={(e) => handleInputChange('rate_per_cylinder', e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="e.g., 150.00"
-                  min="0.01"
-                  step="0.01"
-                  required
-                />
+                <div className="space-y-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-4">
+                  {cylinderTypes.map((cylinderType) => {
+                    const existingRate = rates.find(r => r.cylinder_type_id === cylinderType.CylinderTypeId);
+                    return (
+                      <div key={cylinderType.CylinderTypeId} className="flex items-center justify-between space-x-3">
+                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                          <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-sm text-gray-700 truncate">{cylinderType.Capacity}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 flex-shrink-0">
+                          <span className="text-sm text-gray-500">₹</span>
+                          <input
+                            type="number"
+                            value={existingRate?.rate_per_cylinder || ''}
+                            onChange={(e) => handleRateChange(cylinderType.CylinderTypeId, e.target.value)}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="0.00"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {rates.length === 0 && (
+                  <div className="text-center py-4 text-sm text-gray-500">
+                    Set rates for each cylinder type above
+                  </div>
+                )}
               </div>
 
               {/* Valid From Date */}
@@ -297,7 +425,7 @@ export function RateContractFormModal({ isOpen, onClose, rateContract, onSuccess
                   <div className="mt-2 flex items-center space-x-2">
                     {new Date(formData.valid_to) < new Date() ? (
                       <>
-                        <X className="w-4 h-4 text-red-600" />
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
                         <span className="text-sm text-red-600">Contract has expired</span>
                       </>
                     ) : (

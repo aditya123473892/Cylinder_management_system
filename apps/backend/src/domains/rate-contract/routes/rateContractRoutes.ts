@@ -11,6 +11,9 @@ router.get('/', AuthMiddleware.authenticate, (req: Request, res: Response) => ra
 // GET /api/rate-contracts/active - Get active rate contracts for specific criteria
 router.get('/active', AuthMiddleware.authenticate, (req: Request, res: Response) => rateContractController.getActiveRateContracts(req, res));
 
+// GET /api/rate-contracts/active-rate - Get active rate for a specific cylinder
+router.get('/active-rate', AuthMiddleware.authenticate, (req: Request, res: Response) => rateContractController.getActiveRateForCylinder(req, res));
+
 // GET /api/rate-contracts/:id - Get rate contract by ID
 router.get('/:id', AuthMiddleware.authenticate, (req: Request, res: Response) => rateContractController.getRateContractById(req, res));
 

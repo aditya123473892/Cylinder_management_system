@@ -62,19 +62,30 @@ export class RateContractController {
 
   async getActiveRateContracts(req: Request, res: Response): Promise<void> {
     try {
-      const { customerType, cylinderTypeId, effectiveDate } = req.query;
+      const { customerId, dealerId, effectiveDate } = req.query;
 
-      if (!customerType || !cylinderTypeId || !effectiveDate) {
+      const customerIdNum = customerId ? parseInt(customerId as string) : undefined;
+      const dealerIdNum = dealerId ? parseInt(dealerId as string) : undefined;
+
+      if (customerId && isNaN(customerIdNum!)) {
         res.status(400).json({
           success: false,
-          message: 'customerType, cylinderTypeId, and effectiveDate are required'
+          message: 'Invalid customerId'
+        });
+        return;
+      }
+
+      if (dealerId && isNaN(dealerIdNum!)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid dealerId'
         });
         return;
       }
 
       const contracts = await this.service.getActiveRateContracts(
-        customerType as string,
-        parseInt(cylinderTypeId as string),
+        customerIdNum,
+        dealerIdNum,
         effectiveDate as string
       );
 
@@ -85,6 +96,59 @@ export class RateContractController {
       });
     } catch (error) {
       console.error('Error in getActiveRateContracts:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  async getActiveRateForCylinder(req: Request, res: Response): Promise<void> {
+    try {
+      const { customerId, dealerId, cylinderTypeId, effectiveDate } = req.query;
+
+      const customerIdNum = customerId ? parseInt(customerId as string) : undefined;
+      const dealerIdNum = dealerId ? parseInt(dealerId as string) : undefined;
+      const cylinderTypeIdNum = cylinderTypeId ? parseInt(cylinderTypeId as string) : undefined;
+
+      if (customerId && isNaN(customerIdNum!)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid customerId'
+        });
+        return;
+      }
+
+      if (dealerId && isNaN(dealerIdNum!)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid dealerId'
+        });
+        return;
+      }
+
+      if (!cylinderTypeId || isNaN(cylinderTypeIdNum!)) {
+        res.status(400).json({
+          success: false,
+          message: 'Valid cylinderTypeId is required'
+        });
+        return;
+      }
+
+      const rate = await this.service.getActiveRateForCylinder(
+        customerIdNum,
+        dealerIdNum,
+        cylinderTypeIdNum,
+        effectiveDate as string
+      );
+
+      res.status(200).json({
+        success: true,
+        data: rate,
+        message: 'Active rate for cylinder retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error in getActiveRateForCylinder:', error);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Internal server error'
