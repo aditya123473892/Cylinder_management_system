@@ -280,4 +280,49 @@ export class CylinderInventoryService {
       await this.moveCylinders(movement);
     }
   }
+
+  async initializeInventory(
+    locationType: string,
+    referenceId: number | null,
+    cylinders: Array<{
+      cylinderTypeId: number;
+      quantity: number;
+      cylinderStatus: 'FILLED' | 'EMPTY';
+    }>,
+    updatedBy: number
+  ): Promise<any> {
+    try {
+      const results = [];
+
+      for (const cylinder of cylinders) {
+        // Add cylinders to the specified location
+        await this.repository.updateInventory(
+          cylinder.cylinderTypeId,
+          locationType as LocationType,
+          referenceId,
+          cylinder.cylinderStatus,
+          cylinder.quantity, // Positive quantity for initialization
+          updatedBy
+        );
+
+        results.push({
+          cylinderTypeId: cylinder.cylinderTypeId,
+          quantity: cylinder.quantity,
+          status: cylinder.cylinderStatus,
+          locationType,
+          referenceId
+        });
+      }
+
+      return {
+        initializedCylinders: results,
+        totalQuantity: cylinders.reduce((sum, c) => sum + c.quantity, 0),
+        locationType,
+        referenceId
+      };
+    } catch (error) {
+      console.error('Error initializing inventory:', error);
+      throw error instanceof Error ? error : new Error('Failed to initialize inventory');
+    }
+  }
 }

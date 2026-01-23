@@ -25,4 +25,7 @@ router.get('/available/:cylinderTypeId/:locationType/:referenceId?/:cylinderStat
 // GET /api/cylinder-inventory/movements - Get cylinder movements with optional filters
 router.get('/movements', (req, res) => inventoryController.getCylinderMovements(req, res));
 
+// POST /api/cylinder-inventory/initialize - Initialize inventory by adding cylinders to locations
+router.post('/initialize', (req, res) => inventoryController.initializeInventory(req, res));
+
 export default router;

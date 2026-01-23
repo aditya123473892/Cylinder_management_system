@@ -162,4 +162,76 @@ export class CylinderInventoryController {
       });
     }
   }
+
+  async initializeInventory(req: Request, res: Response): Promise<Response> {
+    try {
+      const { locationType, referenceId, cylinders } = req.body;
+
+      // Validate required fields
+      if (!locationType || !cylinders || !Array.isArray(cylinders)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Location type and cylinders array are required'
+        });
+      }
+
+      // Validate each cylinder entry
+      for (const cylinder of cylinders) {
+        if (!cylinder.cylinderTypeId || !cylinder.quantity || !cylinder.cylinderStatus) {
+          return res.status(400).json({
+            success: false,
+            message: 'Each cylinder must have cylinderTypeId, quantity, and cylinderStatus'
+          });
+        }
+        if (cylinder.quantity <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cylinder quantity must be greater than 0'
+          });
+        }
+        if (!['FILLED', 'EMPTY'].includes(cylinder.cylinderStatus)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cylinder status must be either FILLED or EMPTY'
+          });
+        }
+      }
+
+      // Validate location type
+      const validLocationTypes = ['YARD', 'PLANT', 'CUSTOMER', 'VEHICLE', 'REFILLING'];
+      if (!validLocationTypes.includes(locationType)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid location type. Must be one of: ${validLocationTypes.join(', ')}`
+        });
+      }
+
+      // For CUSTOMER and VEHICLE, referenceId is required
+      if ((locationType === 'CUSTOMER' || locationType === 'VEHICLE') && !referenceId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Reference ID is required for CUSTOMER and VEHICLE locations'
+        });
+      }
+
+      const result = await this.inventoryService.initializeInventory(
+        locationType,
+        referenceId,
+        cylinders,
+        (req as any).user?.id || 1 // Default to user ID 1 if not available
+      );
+
+      return res.json({
+        success: true,
+        data: result,
+        message: `Successfully initialized ${cylinders.length} cylinder types in ${locationType.toLowerCase()}`
+      });
+    } catch (error) {
+      console.error('Error initializing inventory:', error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to initialize inventory'
+      });
+    }
+  }
 }

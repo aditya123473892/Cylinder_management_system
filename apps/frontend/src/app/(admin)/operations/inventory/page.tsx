@@ -2,43 +2,121 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Truck, Building2, Warehouse, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Package, Truck, Building2, Warehouse, AlertTriangle, Loader2, RefreshCw, Filter, X } from 'lucide-react';
 import { cylinderInventoryApi } from '../../../../lib/api/cylinderInventoryApi';
-import { InventoryDashboard, InventoryItem, CylinderMovement, InventorySummary } from '../../../../types/cylinderInventory';
+import { cylinderTypeApi } from '../../../../lib/api/cylinderTypeApi';
+import { customerApi } from '../../../../lib/api/customerApi';
+import { vehicleApi } from '../../../../lib/api/vehicleApi';
+import { InventoryDashboard, InventoryItem, InventoryQuery } from '../../../../types/cylinderInventory';
+import { CylinderTypeMaster } from '../../../../types/cylinderType';
+import { CustomerMaster } from '../../../../types/customer';
+import { VehicleMaster } from '../../../../types/vehicle';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function InventoryPage() {
   const [dashboard, setDashboard] = useState<InventoryDashboard | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
-  const [movements, setMovements] = useState<CylinderMovement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [filterLoading, setFilterLoading] = useState(false);
+
+  // Filter states
+  const [cylinderTypes, setCylinderTypes] = useState<CylinderTypeMaster[]>([]);
+  const [customers, setCustomers] = useState<CustomerMaster[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleMaster[]>([]);
+  const [filters, setFilters] = useState<InventoryQuery>({});
 
   useEffect(() => {
-    loadDashboardData();
+    loadInitialData();
   }, []);
 
-  const loadDashboardData = async () => {
+  useEffect(() => {
+    if (Object.keys(filters).length > 0) {
+      loadFilteredInventory();
+    } else {
+      // When no filters, reload full dashboard
+      loadInitialData();
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    if (Object.keys(filters).length > 0 && inventoryItems.length > 0) {
+      const calculatedDashboard = calculateDashboardFromItems(inventoryItems);
+      setDashboard(calculatedDashboard);
+    }
+  }, [inventoryItems, filters]);
+
+  const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [dashboardRes, inventoryRes, summaryRes, movementsRes] = await Promise.all([
+      const [dashboardRes, cylinderTypesRes, customersRes, vehiclesRes] = await Promise.all([
         cylinderInventoryApi.getInventoryDashboard(),
-        cylinderInventoryApi.getInventory(),
-        cylinderInventoryApi.getInventorySummary(),
-        cylinderInventoryApi.getCylinderMovements(undefined, undefined, 20)
+        cylinderTypeApi.getAllCylinderTypes(),
+        customerApi.getAllCustomers(),
+        vehicleApi.getAllVehicles()
       ]);
 
       setDashboard(dashboardRes.data);
-      setInventoryItems(inventoryRes.data);
-      setInventorySummary(summaryRes.data);
-      setMovements(movementsRes.data);
+      setCylinderTypes(cylinderTypesRes);
+      setCustomers(customersRes);
+      setVehicles(vehiclesRes);
+
+      // Load all inventory initially
+      await loadFilteredInventory();
     } catch (error) {
       toast.error('Failed to load inventory data');
       console.error('Error loading inventory data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadFilteredInventory = async () => {
+    try {
+      setFilterLoading(true);
+      const response = await cylinderInventoryApi.getInventory(filters);
+      setInventoryItems(response.data);
+    } catch (error) {
+      toast.error('Failed to load filtered inventory');
+      console.error('Error loading filtered inventory:', error);
+    } finally {
+      setFilterLoading(false);
+    }
+  };
+
+  const handleFilterChange = (key: keyof InventoryQuery, value: any) => {
+    const newFilters = { ...filters };
+
+    if (value === '' || value === undefined || value === null) {
+      delete newFilters[key];
+    } else {
+      newFilters[key] = value;
+    }
+
+    // Clear reference ID when location type changes
+    if (key === 'locationType') {
+      delete newFilters.referenceId;
+    }
+
+    setFilters(newFilters);
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+  };
+
+  const getReferenceOptions = () => {
+    if (filters.locationType === 'CUSTOMER') {
+      return customers.map(customer => ({
+        value: customer.CustomerId,
+        label: customer.CustomerName
+      }));
+    } else if (filters.locationType === 'VEHICLE') {
+      return vehicles.map(vehicle => ({
+        value: vehicle.vehicle_id,
+        label: vehicle.vehicle_number
+      }));
+    }
+    return [];
   };
 
   const getLocationIcon = (locationType: string) => {
@@ -49,6 +127,48 @@ export default function InventoryPage() {
       case 'vehicle': return <Truck className="w-4 h-4 text-purple-600" />;
       default: return <Package className="w-4 h-4 text-gray-600" />;
     }
+  };
+
+  const calculateDashboardFromItems = (items: InventoryItem[]): InventoryDashboard => {
+    let totalCylinders = 0;
+    const byLocation = {
+      yard: { filled: 0, empty: 0, total: 0 },
+      plant: { filled: 0, empty: 0, total: 0 },
+      customers: { filled: 0, empty: 0, total: 0 },
+      vehicles: { filled: 0, empty: 0, total: 0 },
+    };
+
+    items.forEach(item => {
+      totalCylinders += item.quantity;
+
+      const locationType = item.locationType.toLowerCase();
+      const status = item.cylinderStatus.toLowerCase();
+
+      if (locationType === 'yard') {
+        byLocation.yard.total += item.quantity;
+        if (status === 'filled') byLocation.yard.filled += item.quantity;
+        else if (status === 'empty') byLocation.yard.empty += item.quantity;
+      } else if (locationType === 'plant') {
+        byLocation.plant.total += item.quantity;
+        if (status === 'filled') byLocation.plant.filled += item.quantity;
+        else if (status === 'empty') byLocation.plant.empty += item.quantity;
+      } else if (locationType === 'customer') {
+        byLocation.customers.total += item.quantity;
+        if (status === 'filled') byLocation.customers.filled += item.quantity;
+        else if (status === 'empty') byLocation.customers.empty += item.quantity;
+      } else if (locationType === 'vehicle') {
+        byLocation.vehicles.total += item.quantity;
+        if (status === 'filled') byLocation.vehicles.filled += item.quantity;
+        else if (status === 'empty') byLocation.vehicles.empty += item.quantity;
+      }
+    });
+
+    return {
+      totalCylinders,
+      byLocation,
+      recentMovements: [], // Not needed for filtered dashboard
+      alerts: [] // Not needed for filtered dashboard
+    };
   };
 
   const getStatusBadge = (status: string) => {
@@ -63,10 +183,6 @@ export default function InventoryPage() {
     );
   };
 
-  const formatMovementType = (type: string) => {
-    return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -76,13 +192,6 @@ export default function InventoryPage() {
     );
   }
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'locations', label: 'By Location' },
-    { id: 'types', label: 'By Type' },
-    { id: 'movements', label: 'Movements' }
-  ];
-
   return (
     <div className="p-6">
       <Toaster />
@@ -90,10 +199,10 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cylinder Inventory</h1>
-          <p className="text-gray-600">Real-time visibility of cylinder locations and status</p>
+          <p className="text-gray-600">Find and filter cylinders by type and location</p>
         </div>
         <button
-          onClick={loadDashboardData}
+          onClick={() => window.location.reload()}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -101,241 +210,214 @@ export default function InventoryPage() {
         </button>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      {/* Dashboard Tab */}
-      {activeTab === 'dashboard' && dashboard && (
-        <div className="space-y-6">
-          {/* Alerts */}
-          {dashboard.alerts.length > 0 && (
-            <div className="space-y-2">
-              {dashboard.alerts.map((alert: any, index: number) => (
-                <div key={index} className={`p-4 rounded-lg border ${
-                  alert.type === 'warning' ? 'border-yellow-500 bg-yellow-50' : 'border-blue-500 bg-blue-50'
-                }`}>
-                  <div className="flex">
-                    <AlertTriangle className={`w-5 h-5 ${
-                      alert.type === 'warning' ? 'text-yellow-400' : 'text-blue-400'
-                    }`} />
-                    <div className="ml-3">
-                      <p className={`text-sm font-medium ${
-                        alert.type === 'warning' ? 'text-yellow-800' : 'text-blue-800'
-                      }`}>
-                        {alert.message}
-                      </p>
-                    </div>
-                  </div>
+      {/* Dashboard Summary */}
+      {dashboard && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Package className="h-6 w-6 text-gray-400" />
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Package className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Cylinders</dt>
-                      <dd className="text-lg font-medium text-gray-900">{dashboard.totalCylinders.toLocaleString()}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Warehouse className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Yard (Filled)</dt>
-                      <dd className="text-lg font-medium text-green-600">{dashboard.byLocation.yard.filled.toLocaleString()}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Building2 className="h-6 w-6 text-orange-600" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Plant (Empty)</dt>
-                      <dd className="text-lg font-medium text-orange-600">{dashboard.byLocation.plant.empty.toLocaleString()}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Package className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">With Customers</dt>
-                      <dd className="text-lg font-medium text-blue-600">{dashboard.byLocation.customers.total.toLocaleString()}</dd>
-                      <dd className="text-xs text-gray-500">
-                        {dashboard.byLocation.customers.filled} filled, {dashboard.byLocation.customers.empty} empty
-                      </dd>
-                    </dl>
-                  </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Cylinders</dt>
+                    <dd className="text-lg font-medium text-gray-900">{dashboard.totalCylinders.toLocaleString()}</dd>
+                  </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Location Breakdown */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Inventory by Location</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(dashboard.byLocation).map(([location, data]: [string, any]) => (
-                  <div key={location} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      {getLocationIcon(location)}
-                      <span className="font-medium capitalize">{location}</span>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Filled:</span>
-                        <span className="font-medium text-green-600">{data.filled}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Empty:</span>
-                        <span className="font-medium text-orange-600">{data.empty}</span>
-                      </div>
-                      <div className="flex justify-between border-t pt-1">
-                        <span>Total:</span>
-                        <span className="font-medium">{data.total}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Warehouse className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Yard (Filled)</dt>
+                    <dd className="text-lg font-medium text-green-600">{dashboard.byLocation.yard.filled.toLocaleString()}</dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Customer-Specific Inventory */}
-          {inventoryItems.filter(item => item.locationType === 'CUSTOMER').length > 0 && (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Cylinders with Customers</h3>
-                <div className="space-y-3">
-                  {inventoryItems
-                    .filter(item => item.locationType === 'CUSTOMER')
-                    .sort((a, b) => (a.locationReferenceName || '').localeCompare(b.locationReferenceName || ''))
-                    .map((item: InventoryItem) => (
-                    <div key={item.inventoryId} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-blue-50">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-full">
-                          <Package className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {item.locationReferenceName || 'Unknown Customer'}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {item.cylinderTypeName} - {item.cylinderStatus}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-blue-600">{item.quantity}</p>
-                        <p className="text-xs text-gray-500">cylinders</p>
-                      </div>
-                    </div>
-                  ))}
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Building2 className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Plant (Empty)</dt>
+                    <dd className="text-lg font-medium text-orange-600">{dashboard.byLocation.plant.empty.toLocaleString()}</dd>
+                  </dl>
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Recent Movements */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Movements</h3>
-              <div className="space-y-3">
-                {dashboard.recentMovements.slice(0, 5).map((movement: CylinderMovement) => (
-                  <div key={movement.movement_id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded-full">
-                        <Package className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{movement.cylinder_type_name}</p>
-                        <p className="text-sm text-gray-500">
-                          {formatMovementType(movement.movement_type || '')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">{movement.quantity} cylinders</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(movement.movement_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Package className="h-6 w-6 text-green-600" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">With Customers</dt>
+                    <dd className="text-lg font-medium text-blue-600">{dashboard.byLocation.customers.total.toLocaleString()}</dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* By Location Tab */}
-      {activeTab === 'locations' && (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Inventory by Location</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+      {/* Filters Section */}
+      <div className="bg-white shadow rounded-lg mb-6">
+        <div className="px-4 py-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Filter Cylinders</h3>
+            {Object.keys(filters).length > 0 && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear Filters
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Cylinder Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cylinder Type
+              </label>
+              <select
+                value={filters.cylinderTypeId || ''}
+                onChange={(e) => handleFilterChange('cylinderTypeId', e.target.value ? parseInt(e.target.value) : undefined)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Types</option>
+                {cylinderTypes.map((type) => (
+                  <option key={type.CylinderTypeId} value={type.CylinderTypeId}>
+                    {type.Capacity}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Location Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Location Type
+              </label>
+              <select
+                value={filters.locationType || ''}
+                onChange={(e) => handleFilterChange('locationType', e.target.value || undefined)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Locations</option>
+                <option value="YARD">Yard</option>
+                <option value="VEHICLE">Vehicle</option>
+                <option value="CUSTOMER">Customer</option>
+                <option value="PLANT">Plant</option>
+                <option value="REFILLING">Refilling</option>
+              </select>
+            </div>
+
+            {/* Reference Filter (conditional) */}
+            {(filters.locationType === 'CUSTOMER' || filters.locationType === 'VEHICLE') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {filters.locationType === 'CUSTOMER' ? 'Customer' : 'Vehicle'}
+                </label>
+                <select
+                  value={filters.referenceId || ''}
+                  onChange={(e) => handleFilterChange('referenceId', e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All {filters.locationType === 'CUSTOMER' ? 'Customers' : 'Vehicles'}</option>
+                  {getReferenceOptions().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
+              <select
+                value={filters.cylinderStatus || ''}
+                onChange={(e) => handleFilterChange('cylinderStatus', e.target.value || undefined)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Status</option>
+                <option value="FILLED">Filled</option>
+                <option value="EMPTY">Empty</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Results Table */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              Cylinder Inventory Results
+              {filterLoading && <span className="ml-2 text-sm text-gray-500">(Loading...)</span>}
+            </h3>
+            <div className="text-sm text-gray-500">
+              Showing {inventoryItems.length} cylinders
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cylinder Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filterLoading ? (
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cylinder Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                    <td colSpan={6} className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-600 mr-2" />
+                        Loading filtered results...
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {inventoryItems.map((item: InventoryItem) => (
+                ) : inventoryItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      No cylinders found matching the current filters
+                    </td>
+                  </tr>
+                ) : (
+                  inventoryItems.map((item: InventoryItem) => (
                     <motion.tr key={item.inventoryId} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center gap-2">
@@ -365,103 +447,13 @@ export default function InventoryPage() {
                         {new Date(item.lastUpdated).toLocaleDateString()}
                       </td>
                     </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
-
-      {/* By Type Tab */}
-      {activeTab === 'types' && (
-        <div className="space-y-4">
-          {inventorySummary.map((summary: InventorySummary) => (
-            <div key={summary.cylinderTypeId} className="bg-white shadow rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{summary.cylinderTypeName}</h3>
-                <span className="inline-flex px-3 py-1 text-sm font-medium bg-gray-100 text-gray-800 rounded-full">
-                  Total: {summary.totalQuantity}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(summary.locations).map(([location, data]: [string, any]) => (
-                  <div key={location} className="text-sm border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      {getLocationIcon(location)}
-                      <span className="capitalize font-medium">{location.toLowerCase()}</span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between">
-                        <span>Filled:</span>
-                        <span className="text-green-600 font-medium">{data.filled}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Empty:</span>
-                        <span className="text-orange-600 font-medium">{data.empty}</span>
-                      </div>
-                      <div className="flex justify-between border-t pt-1">
-                        <span>Total:</span>
-                        <span className="font-medium">{data.total}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Movements Tab */}
-      {activeTab === 'movements' && (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Movement History</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cylinder Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Movement Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From → To</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {movements.map((movement: CylinderMovement) => (
-                    <motion.tr key={movement.movement_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(movement.movement_date).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {movement.cylinder_type_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {formatMovementType(movement.movement_type || '')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {movement.from_location_type ? `${movement.from_location_type} → ` : ''}
-                        {movement.to_location_type}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                        {movement.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {movement.moved_by_name}
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

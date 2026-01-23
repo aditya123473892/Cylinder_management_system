@@ -68,6 +68,23 @@ class CylinderInventoryApi {
 
     return this.request<{ success: boolean; data: CylinderMovement[] }>(endpoint);
   }
+
+  async initializeInventory(data: {
+    locationType: string;
+    referenceId?: number;
+    cylinders: Array<{
+      cylinderTypeId: number;
+      quantity: number;
+      cylinderStatus: 'FILLED' | 'EMPTY';
+    }>;
+  }): Promise<{ success: boolean; data: any; message: string }> {
+    // Initialize inventory by adding cylinders to specified locations
+    return this.request<{ success: boolean; data: any; message: string }>('/api/cylinder-inventory/initialize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
-export const cylinderInventoryApi = new CylinderInventoryApi();
+const apiInstance = new CylinderInventoryApi();
+export { apiInstance as cylinderInventoryApi };

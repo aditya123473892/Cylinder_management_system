@@ -101,13 +101,13 @@ export default function DealersPage() {
   };
 
   const getImageSrc = (imageData: string | null) => {
-    if (!imageData) return null;
-    
+    if (!imageData) return undefined;
+
     // If already has data URI prefix, return as-is
     if (imageData.startsWith('data:')) {
       return imageData;
     }
-    
+
     // Otherwise, add the base64 prefix
     return `data:image/jpeg;base64,${imageData}`;
   };
