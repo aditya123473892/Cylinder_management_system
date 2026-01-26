@@ -41,6 +41,10 @@ const navigationItems = [
         href: '/operations/inventory',
       },
       {
+        name: 'Delivery Orders',
+        href: '/operations/delivery-orders',
+      },
+      {
         name: 'Dispatch Note',
         href: '/operations/delivery',
       },

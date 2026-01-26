@@ -10,6 +10,7 @@ import vehicleRoutes from './domains/vehicles/routes/vehicleRoutes';
 import driverRoutes from './domains/drivers/routes/driverRoutes';
 import rateContractRoutes from './domains/rate-contract/routes/rateContractRoutes';
 import deliveryTransactionRoutes from './domains/delivery/routes/deliveryTransactionRoutes';
+import deliveryOrderRoutes from './domains/delivery-orders/routes/deliveryOrderRoutes';
 import grRoutes from './domains/gr/routes/grRoutes';
 import authRoutes from './domains/auth-rbac/routes/authroutes';
 
@@ -93,6 +94,9 @@ app.use('/api/rate-contracts', rateContractRoutes);
 
 // Delivery transaction routes
 app.use('/api/delivery-transactions', deliveryTransactionRoutes);
+
+// Delivery orders routes
+app.use('/api/delivery-orders', deliveryOrderRoutes);
 
 // GR routes
 app.use('/api/gr', grRoutes);
