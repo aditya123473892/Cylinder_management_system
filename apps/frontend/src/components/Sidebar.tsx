@@ -45,8 +45,8 @@ const navigationItems = [
         href: '/operations/delivery-orders',
       },
       {
-        name: 'Dispatch Note',
-        href: '/operations/delivery',
+        name: 'Dispatch Notes & Exchange',
+        href: '/operations/dispatch-notes',
       },
             {
         name: 'Cylinder Initialization',

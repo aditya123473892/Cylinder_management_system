@@ -12,23 +12,46 @@ import {
 } from '../types/deliveryOrder';
 
 export class DeliveryOrderService {
-  private repository: DeliveryOrderRepository;
+  private repository: DeliveryOrderRepository = null as any;
+  private pool: sql.ConnectionPool = null as any;
+  private initialized: boolean = false;
 
   constructor() {
-    this.repository = new DeliveryOrderRepository(connectDB as any);
+    this.initialize();
   }
 
-  // Initialize with pool
-  async initialize(pool: sql.ConnectionPool) {
-    this.repository = new DeliveryOrderRepository(pool);
+  private async initialize(): Promise<void> {
+    try {
+      this.pool = await connectDB();
+      this.repository = new DeliveryOrderRepository(this.pool);
+      this.initialized = true;
+    } catch (error) {
+      console.error('Failed to initialize database connection:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to ensure pool is available
+  private ensurePool(): sql.ConnectionPool {
+    if (!this.pool || !this.initialized) {
+      throw new Error('Database connection not initialized');
+    }
+    return this.pool;
+  }
+
+  // Helper method to ensure repository is available
+  private ensureRepository(): DeliveryOrderRepository {
+    if (!this.repository || !this.initialized) {
+      throw new Error('Repository not initialized');
+    }
+    return this.repository;
   }
 
   // Delivery Order Management
   async createDeliveryOrder(request: CreateDeliveryOrderRequest): Promise<number> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
+      const pool = await this.ensurePool();
+
       // Create table-valued parameter for order lines
       const orderLinesTable = new sql.Table('DeliveryOrderLineType');
       orderLinesTable.columns.add('cylinder_type_id', sql.Int);
@@ -83,10 +106,8 @@ export class DeliveryOrderService {
     date_from?: string;
     date_to?: string;
   }) {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    return await this.repository.getDeliveryOrders({
+    const repository = await this.ensureRepository();
+    return await repository.getDeliveryOrders({
       customer_id: filters?.customer_id,
       status: filters?.status,
       date_from: filters?.date_from ? new Date(filters.date_from) : undefined,
@@ -95,19 +116,14 @@ export class DeliveryOrderService {
   }
 
   async getDeliveryOrderWithLines(orderId: number): Promise<DeliveryOrderWithLines | null> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    return await this.repository.getDeliveryOrderWithLines(orderId);
+    const repository = await this.ensureRepository();
+    return await repository.getDeliveryOrderWithLines(orderId);
   }
 
   // Delivery Planning
   async createDeliveryPlan(request: CreateDeliveryPlanRequest): Promise<number> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
-      await pool.query('BEGIN TRANSACTION');
+      const pool = await this.ensurePool();
 
       // Validate vehicle and driver availability
       const vehicleCheck = await pool.request()
@@ -143,8 +159,10 @@ export class DeliveryOrderService {
         }
       }
 
+      const repository = await this.ensureRepository();
+
       // Create delivery plan
-      const planId = await this.repository.createDeliveryPlan({
+      const planId = await repository.createDeliveryPlan({
         plan_date: new Date(request.plan_date),
         vehicle_id: request.vehicle_id,
         driver_id: request.driver_id,
@@ -155,17 +173,15 @@ export class DeliveryOrderService {
       });
 
       // Assign orders to plan
-      await this.repository.assignOrdersToPlan(planId, request.orders.map(order => ({
+      await repository.assignOrdersToPlan(planId, request.orders.map(order => ({
         order_id: order.order_id,
         sequence_number: order.sequence_number,
         planned_delivery_time: order.planned_delivery_time ? new Date(order.planned_delivery_time) : undefined
       })));
 
-      await pool.query('COMMIT TRANSACTION');
       return planId;
 
     } catch (error) {
-      await pool.query('ROLLBACK TRANSACTION');
       throw error;
     }
   }
@@ -176,10 +192,8 @@ export class DeliveryOrderService {
     status?: string;
     vehicle_id?: number;
   }) {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    return await this.repository.getDeliveryPlans({
+    const repository = await this.ensureRepository();
+    return await repository.getDeliveryPlans({
       date_from: filters?.date_from ? new Date(filters.date_from) : undefined,
       date_to: filters?.date_to ? new Date(filters.date_to) : undefined,
       status: filters?.status,
@@ -189,10 +203,10 @@ export class DeliveryOrderService {
 
   // Loading Process
   async startLoading(planId: number, loadedBy: number, supervisorId?: number): Promise<number> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
+      const pool = await this.ensurePool();
+      const repository = await this.ensureRepository();
+
       await pool.query('BEGIN TRANSACTION');
 
       // Validate plan exists and is in correct status
@@ -209,10 +223,10 @@ export class DeliveryOrderService {
       }
 
       // Create loading transaction
-      const loadingId = await this.repository.createLoadingTransaction(planId, loadedBy, supervisorId);
+      const loadingId = await repository.createLoadingTransaction(planId, loadedBy, supervisorId);
 
       // Update plan status
-      await this.repository.updatePlanStatus(planId, 'LOADING', loadedBy);
+      await repository.updatePlanStatus(planId, 'LOADING', loadedBy);
 
       // Update order statuses
       await pool.request()
@@ -232,16 +246,16 @@ export class DeliveryOrderService {
       return loadingId;
 
     } catch (error) {
-      await pool.query('ROLLBACK TRANSACTION');
+      await this.pool.query('ROLLBACK TRANSACTION');
       throw error;
     }
   }
 
   async completeLoading(loadingId: number, loadingLines: LoadingLineRequest[], notes?: string): Promise<void> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
+      const pool = await this.ensurePool();
+      const repository = await this.ensureRepository();
+
       await pool.query('BEGIN TRANSACTION');
 
       // Get plan ID
@@ -257,25 +271,24 @@ export class DeliveryOrderService {
 
       // Process loading lines (this would call the stored procedure)
       // For now, we'll update the status
-      await this.repository.updateLoadingStatus(loadingId, 'COMPLETED', notes);
+      await repository.updateLoadingStatus(loadingId, 'COMPLETED', notes);
 
       // Update plan status
-      await this.repository.updatePlanStatus(planId, 'LOADED', 0); // TODO: Get user from context
+      await repository.updatePlanStatus(planId, 'LOADED', 0); // TODO: Get user from context
 
       await pool.query('COMMIT TRANSACTION');
 
     } catch (error) {
-      await pool.query('ROLLBACK TRANSACTION');
+      await this.pool.query('ROLLBACK TRANSACTION');
       throw error;
     }
   }
 
   // Delivery Execution
   async recordDeliveryExecution(planId: number, orderId: number, deliveryTransactionId: number, actualDeliveryTime?: string): Promise<void> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
+      const pool = await this.ensurePool();
+
       await pool.query('BEGIN TRANSACTION');
 
       // Validate delivery transaction exists and is linked to order
@@ -324,17 +337,17 @@ export class DeliveryOrderService {
       await pool.query('COMMIT TRANSACTION');
 
     } catch (error) {
-      await pool.query('ROLLBACK TRANSACTION');
+      await this.pool.query('ROLLBACK TRANSACTION');
       throw error;
     }
   }
 
   // Reconciliation
   async createReconciliation(planId: number, reconciledBy: number, reconciliationLines: ReconciliationLineRequest[]): Promise<number> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
     try {
+      const pool = await this.ensurePool();
+      const repository = await this.ensureRepository();
+
       await pool.query('BEGIN TRANSACTION');
 
       // Validate plan is completed
@@ -356,7 +369,7 @@ export class DeliveryOrderService {
       }
 
       // Create reconciliation (this would call the stored procedure)
-      const reconciliationId = await this.repository.createReconciliation({
+      const reconciliationId = await repository.createReconciliation({
         plan_id: planId,
         reconciled_by: reconciledBy
       });
@@ -365,41 +378,33 @@ export class DeliveryOrderService {
       return reconciliationId;
 
     } catch (error) {
-      await pool.query('ROLLBACK TRANSACTION');
+      await this.pool.query('ROLLBACK TRANSACTION');
       throw error;
     }
   }
 
   // Dashboard and Reporting
   async getDashboardData(dateFrom?: string, dateTo?: string): Promise<DeliveryDashboardData> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    return await this.repository.getDashboardData(
+    const repository = await this.ensureRepository();
+    return await repository.getDashboardData(
       dateFrom ? new Date(dateFrom) : undefined,
       dateTo ? new Date(dateTo) : undefined
     );
   }
 
   async getUserPendingTasks(userId: number): Promise<UserPendingTasks[]> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    return await this.repository.getUserPendingTasks(userId);
+    const repository = await this.ensureRepository();
+    return await repository.getUserPendingTasks(userId);
   }
 
   // Status Updates
   async updateOrderStatus(orderId: number, status: string, updatedBy: number): Promise<void> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    await this.repository.updateOrderStatus(orderId, status, updatedBy);
+    const repository = await this.ensureRepository();
+    await repository.updateOrderStatus(orderId, status, updatedBy);
   }
 
   async updatePlanStatus(planId: number, status: string, updatedBy: number): Promise<void> {
-    const pool = await connectDB();
-    await this.initialize(pool);
-
-    await this.repository.updatePlanStatus(planId, status, updatedBy);
+    const repository = await this.ensureRepository();
+    await repository.updatePlanStatus(planId, status, updatedBy);
   }
 }
