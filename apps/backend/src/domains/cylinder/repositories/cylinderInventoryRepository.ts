@@ -132,76 +132,90 @@ export class CylinderInventoryRepository {
   ): Promise<void> {
     const pool = await this.getPool();
 
-    // Get location reference name if needed
-    let locationReferenceName: string | null = null;
-    if (locationReferenceId) {
-      if (locationType === 'CUSTOMER') {
-        const customerResult = await pool.request()
-          .input('id', sql.Int, locationReferenceId)
-          .query('SELECT CustomerName FROM CUSTOMER_MASTER WHERE CustomerId = @id');
-        locationReferenceName = customerResult.recordset[0]?.CustomerName || null;
-      } else if (locationType === 'VEHICLE') {
-        const vehicleResult = await pool.request()
-          .input('id', sql.Int, locationReferenceId)
-          .query('SELECT vehicle_number FROM VEHICLE_MASTER WHERE vehicle_id = @id');
-        locationReferenceName = vehicleResult.recordset[0]?.vehicle_number || null;
+    try {
+      // Get location reference name if needed
+      let locationReferenceName: string | null = null;
+      if (locationReferenceId) {
+        if (locationType === 'CUSTOMER') {
+          const customerResult = await pool.request()
+            .input('id', sql.Int, locationReferenceId)
+            .query('SELECT CustomerName FROM CUSTOMER_MASTER WHERE CustomerId = @id');
+          locationReferenceName = customerResult.recordset[0]?.CustomerName || null;
+        } else if (locationType === 'VEHICLE') {
+          const vehicleResult = await pool.request()
+            .input('id', sql.Int, locationReferenceId)
+            .query('SELECT vehicle_number FROM VEHICLE_MASTER WHERE vehicle_id = @id');
+          locationReferenceName = vehicleResult.recordset[0]?.vehicle_number || null;
+        }
       }
-    }
 
-    // Check if inventory record exists
-    const existingResult = await pool.request()
-      .input('cylinderTypeId', sql.Int, cylinderTypeId)
-      .input('locationType', sql.VarChar, locationType)
-      .input('referenceId', sql.Int, locationReferenceId)
-      .input('cylinderStatus', sql.VarChar, cylinderStatus)
-      .query(`
-        SELECT inventory_id, quantity FROM CYLINDER_LOCATION_INVENTORY
-        WHERE cylinder_type_id = @cylinderTypeId
-        AND location_type = @locationType
-        AND ISNULL(location_reference_id, 0) = ISNULL(@referenceId, 0)
-        AND cylinder_status = @cylinderStatus
-      `);
-
-    if (existingResult.recordset.length > 0) {
-      // Update existing record
-      const newQuantity = existingResult.recordset[0].quantity + quantityChange;
-
-      if (newQuantity <= 0) {
-        // Remove record if quantity becomes zero or negative
-        await pool.request()
-          .input('inventoryId', sql.BigInt, existingResult.recordset[0].inventory_id)
-          .query('DELETE FROM CYLINDER_LOCATION_INVENTORY WHERE inventory_id = @inventoryId');
-      } else {
-        // Update quantity
-        await pool.request()
-          .input('inventoryId', sql.BigInt, existingResult.recordset[0].inventory_id)
-          .input('quantity', sql.Int, newQuantity)
-          .input('updatedBy', sql.Int, updatedBy)
-          .query(`
-            UPDATE CYLINDER_LOCATION_INVENTORY
-            SET quantity = @quantity, last_updated = GETDATE(), updated_by = @updatedBy
-            WHERE inventory_id = @inventoryId
-          `);
-      }
-    } else if (quantityChange > 0) {
-      // Create new record only if quantity is positive
-      await pool.request()
+      // Check if inventory record exists
+      const existingResult = await pool.request()
         .input('cylinderTypeId', sql.Int, cylinderTypeId)
         .input('locationType', sql.VarChar, locationType)
         .input('referenceId', sql.Int, locationReferenceId)
-        .input('referenceName', sql.VarChar, locationReferenceName)
         .input('cylinderStatus', sql.VarChar, cylinderStatus)
-        .input('quantity', sql.Int, quantityChange)
-        .input('updatedBy', sql.Int, updatedBy)
         .query(`
-          INSERT INTO CYLINDER_LOCATION_INVENTORY (
-            cylinder_type_id, location_type, location_reference_id, location_reference_name,
-            cylinder_status, quantity, updated_by
-          ) VALUES (
-            @cylinderTypeId, @locationType, @referenceId, @referenceName,
-            @cylinderStatus, @quantity, @updatedBy
-          )
+          SELECT inventory_id, quantity FROM CYLINDER_LOCATION_INVENTORY
+          WHERE cylinder_type_id = @cylinderTypeId
+          AND location_type = @locationType
+          AND ISNULL(location_reference_id, 0) = ISNULL(@referenceId, 0)
+          AND cylinder_status = @cylinderStatus
         `);
+
+      if (existingResult.recordset.length > 0) {
+        // Update existing record
+        const newQuantity = existingResult.recordset[0].quantity + quantityChange;
+
+        if (newQuantity <= 0) {
+          // Remove record if quantity becomes zero or negative
+          await pool.request()
+            .input('inventoryId', sql.BigInt, existingResult.recordset[0].inventory_id)
+            .query('DELETE FROM CYLINDER_LOCATION_INVENTORY WHERE inventory_id = @inventoryId');
+        } else {
+          // Update quantity
+          await pool.request()
+            .input('inventoryId', sql.BigInt, existingResult.recordset[0].inventory_id)
+            .input('quantity', sql.Int, newQuantity)
+            .input('updatedBy', sql.Int, updatedBy)
+            .query(`
+              UPDATE CYLINDER_LOCATION_INVENTORY
+              SET quantity = @quantity, last_updated = GETDATE(), updated_by = @updatedBy
+              WHERE inventory_id = @inventoryId
+            `);
+        }
+      } else if (quantityChange > 0) {
+        // Create new record only if quantity is positive
+        await pool.request()
+          .input('cylinderTypeId', sql.Int, cylinderTypeId)
+          .input('locationType', sql.VarChar, locationType)
+          .input('referenceId', sql.Int, locationReferenceId)
+          .input('referenceName', sql.VarChar, locationReferenceName)
+          .input('cylinderStatus', sql.VarChar, cylinderStatus)
+          .input('quantity', sql.Int, quantityChange)
+          .input('updatedBy', sql.Int, updatedBy)
+          .query(`
+            INSERT INTO CYLINDER_LOCATION_INVENTORY (
+              cylinder_type_id, location_type, location_reference_id, location_reference_name,
+              cylinder_status, quantity, updated_by
+            ) VALUES (
+              @cylinderTypeId, @locationType, @referenceId, @referenceName,
+              @cylinderStatus, @quantity, @updatedBy
+            )
+          `);
+      }
+    } catch (error: any) {
+      // Handle specific foreign key constraint errors
+      if (error.number === 547) {
+        const errorMessage = error.message;
+        if (errorMessage.includes('FK_INVENTORY_USER')) {
+          throw new Error(`User ID ${updatedBy} does not exist in the system. Please ensure the user is properly created in USER_MASTER table.`);
+        } else if (errorMessage.includes('FK_INVENTORY_CYLINDER_TYPE')) {
+          throw new Error(`Cylinder type ID ${cylinderTypeId} does not exist. Please select a valid cylinder type.`);
+        }
+        throw new Error(`Database constraint violation: ${errorMessage}`);
+      }
+      throw error;
     }
   }
 

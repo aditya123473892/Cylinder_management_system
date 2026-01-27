@@ -214,11 +214,19 @@ export class CylinderInventoryController {
         });
       }
 
+      // Validate that user is authenticated
+      if (!req.user?.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required for inventory initialization'
+        });
+      }
+
       const result = await this.inventoryService.initializeInventory(
         locationType,
         referenceId,
         cylinders,
-        (req as any).user?.id || 1 // Default to user ID 1 if not available
+        req.user.userId // Use authenticated user ID from JWT token
       );
 
       return res.json({
