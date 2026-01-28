@@ -211,14 +211,21 @@ export class CylinderInventoryService {
     cylinderStatus: CylinderStatus = 'FILLED'
   ): Promise<number> {
     try {
+      // For YARD location, referenceId should be undefined/null
+      const queryReferenceId = (locationType === 'YARD' || locationType === 'PLANT' || locationType === 'REFILLING') 
+        ? undefined 
+        : locationReferenceId;
+
       const inventory = await this.repository.getInventory({
         cylinderTypeId,
         locationType,
-        referenceId: locationReferenceId,
+        referenceId: queryReferenceId,
         cylinderStatus
       });
 
-      return inventory.length > 0 ? inventory[0].quantity : 0;
+      const quantity = inventory.length > 0 ? inventory[0].quantity : 0;
+
+      return quantity;
     } catch (error) {
       console.error('Error getting available quantity:', error);
       return 0;
@@ -323,6 +330,75 @@ export class CylinderInventoryService {
     } catch (error) {
       console.error('Error initializing inventory:', error);
       throw error instanceof Error ? error : new Error('Failed to initialize inventory');
+    }
+  }
+
+  async createMovement(data: {
+    cylinderTypeId: number;
+    fromLocationType?: string;
+    fromLocationReferenceId?: number;
+    toLocationType: string;
+    toLocationReferenceId?: number;
+    quantity: number;
+    cylinderStatus: 'FILLED' | 'EMPTY';
+    movementType?: string;
+    referenceTransactionId?: number;
+    notes?: string;
+    movedBy: number;
+  }): Promise<any> {
+    try {
+      // Create movement record
+      const movementId = await this.repository.createMovement({
+        cylinderTypeId: data.cylinderTypeId,
+        fromLocationType: data.fromLocationType,
+        fromLocationReferenceId: data.fromLocationReferenceId,
+        toLocationType: data.toLocationType,
+        toLocationReferenceId: data.toLocationReferenceId,
+        quantity: data.quantity,
+        cylinderStatus: data.cylinderStatus,
+        movementType: data.movementType,
+        referenceTransactionId: data.referenceTransactionId,
+        movedBy: data.movedBy,
+        notes: data.notes
+      });
+
+      // Update inventory quantities
+      // Decrease quantity from source location
+      if (data.fromLocationType) {
+        await this.repository.updateInventory(
+          data.cylinderTypeId,
+          data.fromLocationType as any,
+          data.fromLocationReferenceId || null,
+          data.cylinderStatus,
+          -data.quantity, // Negative to decrease
+          data.movedBy
+        );
+      }
+
+      // Increase quantity at destination location
+      await this.repository.updateInventory(
+        data.cylinderTypeId,
+        data.toLocationType as any,
+        data.toLocationReferenceId || null,
+        data.cylinderStatus,
+        data.quantity, // Positive to increase
+        data.movedBy
+      );
+
+      return {
+        movementId,
+        cylinderTypeId: data.cylinderTypeId,
+        fromLocationType: data.fromLocationType,
+        toLocationType: data.toLocationType,
+        quantity: data.quantity,
+        cylinderStatus: data.cylinderStatus,
+        movementType: data.movementType,
+        movedBy: data.movedBy,
+        message: 'Movement processed successfully'
+      };
+    } catch (error) {
+      console.error('Error creating movement:', error);
+      throw error instanceof Error ? error : new Error('Failed to create movement');
     }
   }
 }

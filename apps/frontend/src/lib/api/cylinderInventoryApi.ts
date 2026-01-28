@@ -84,6 +84,24 @@ class CylinderInventoryApi {
       body: JSON.stringify(data),
     });
   }
+
+  async createMovement(data: {
+    cylinderTypeId: number;
+    fromLocationType?: string;
+    fromLocationReferenceId?: number;
+    toLocationType: string;
+    toLocationReferenceId?: number;
+    quantity: number;
+    cylinderStatus: 'FILLED' | 'EMPTY';
+    movementType?: string;
+    referenceTransactionId?: number;
+    notes?: string;
+  }): Promise<{ success: boolean; data: any; message: string }> {
+    return this.request<{ success: boolean; data: any; message: string }>('/api/cylinder-inventory/movements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 const apiInstance = new CylinderInventoryApi();

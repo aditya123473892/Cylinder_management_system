@@ -9,6 +9,7 @@ import { customerApi } from '@/lib/api/customerApi';
 import { locationApi } from '@/lib/api/locationApi';
 import { rateContractApi } from '@/lib/api/rateContractApi';
 import { cylinderTypeApi } from '@/lib/api/cylinderTypeApi';
+import { cylinderInventoryApi } from '@/lib/api/cylinderInventoryApi';
 import { CustomerMaster } from '@/types/customer';
 import { LocationMaster } from '@/types/location';
 import { RateContractMaster } from '@/types/rateContract';
@@ -28,6 +29,8 @@ export default function DeliveryOrdersPage() {
   const [rateContracts, setRateContracts] = useState<RateContractMaster[]>([]);
   const [cylinderTypes, setCylinderTypes] = useState<CylinderTypeMaster[]>([]);
   const [orderLines, setOrderLines] = useState<CreateDeliveryOrderLineRequest[]>([]);
+  const [inventoryAvailability, setInventoryAvailability] = useState<Record<number, number>>({});
+  const [isCheckingInventory, setIsCheckingInventory] = useState(false);
   const [formData, setFormData] = useState({
     order_number: '',
     customer_id: 0,
@@ -120,6 +123,7 @@ export default function DeliveryOrdersPage() {
         cylinderTypeApi.getAllCylinderTypes()
       ]);
 
+      console.log('DEBUG: Loaded cylinder types:', cylinderTypesData);
       setCustomers(customersData);
       setLocations(locationsData);
       setRateContracts(rateContractsData);
@@ -144,10 +148,15 @@ export default function DeliveryOrdersPage() {
       rate_applied: 0,
       cylinder_description: ''
     }]);
+    
+    // Check inventory after adding new line
+    checkInventoryAvailability();
   };
 
   const removeOrderLine = (index: number) => {
     setOrderLines(orderLines.filter((_, i) => i !== index));
+    // Recheck inventory after removing line
+    checkInventoryAvailability();
   };
 
   const updateOrderLine = (index: number, field: keyof CreateDeliveryOrderLineRequest, value: any) => {
@@ -167,11 +176,77 @@ export default function DeliveryOrdersPage() {
       updatedLines[index] = { ...updatedLines[index], [field]: value };
     }
     setOrderLines(updatedLines);
+    
+    // Check inventory availability when cylinder type or quantity changes
+    if (field === 'cylinder_type_id' || field === 'ordered_qty') {
+      checkInventoryAvailability();
+    }
   };
 
   const generateOrderNumber = () => {
     const timestamp = Date.now();
     return `ORD-${timestamp}`;
+  };
+
+  const checkInventoryAvailability = async () => {
+    setIsCheckingInventory(true);
+    const availability: Record<number, number> = {};
+    
+    try {
+      console.log('DEBUG: Checking inventory for orderLines:', orderLines);
+      
+      // Check each order line's cylinder availability in YARD (filled cylinders)
+      for (const line of orderLines) {
+        console.log('DEBUG: Processing line:', line);
+        
+        // Only check if cylinder type is selected (not 0) and quantity is greater than 0
+        if (line.cylinder_type_id && line.cylinder_type_id > 0 && line.ordered_qty > 0) {
+          try {
+            console.log('DEBUG: Checking availability for cylinder type:', line.cylinder_type_id);
+            
+            const response = await cylinderInventoryApi.getAvailableQuantity(
+              line.cylinder_type_id,
+              'YARD',
+              undefined, // No reference ID for YARD
+              'FILLED'   // Check for filled cylinders
+            );
+            
+            console.log('DEBUG: API response for cylinder type', line.cylinder_type_id, ':', response);
+            availability[line.cylinder_type_id] = response.data.quantity;
+          } catch (error) {
+            console.error(`Error checking inventory for cylinder type ${line.cylinder_type_id}:`, error);
+            availability[line.cylinder_type_id] = 0;
+          }
+        } else {
+          console.log('DEBUG: Skipping line - cylinder_type_id:', line.cylinder_type_id, 'ordered_qty:', line.ordered_qty);
+        }
+      }
+      
+      console.log('DEBUG: Final availability:', availability);
+      setInventoryAvailability(availability);
+    } catch (error) {
+      console.error('Error checking inventory availability:', error);
+      toast.error('Failed to check inventory availability');
+    } finally {
+      setIsCheckingInventory(false);
+    }
+  };
+
+  const validateInventoryForOrder = (): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    for (const line of orderLines) {
+      if (line.cylinder_type_id && line.ordered_qty > 0) {
+        const available = inventoryAvailability[line.cylinder_type_id] || 0;
+        const cylinderTypeName = cylinderTypes.find(ct => ct.CylinderTypeId === line.cylinder_type_id)?.Capacity || `Type ${line.cylinder_type_id}`;
+        
+        if (available < line.ordered_qty) {
+          errors.push(`Insufficient ${cylinderTypeName} cylinders: Only ${available} available, but ${line.ordered_qty} requested`);
+        }
+      }
+    }
+    
+    return { isValid: errors.length === 0, errors };
   };
 
   const handleCreateOrder = async () => {
@@ -183,6 +258,13 @@ export default function DeliveryOrdersPage() {
 
       if (orderLines.length === 0) {
         toast.error('Please add at least one cylinder type');
+        return;
+      }
+
+      // Validate inventory availability
+      const inventoryValidation = validateInventoryForOrder();
+      if (!inventoryValidation.isValid) {
+        inventoryValidation.errors.forEach(error => toast.error(error));
         return;
       }
 
@@ -575,55 +657,81 @@ export default function DeliveryOrdersPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {orderLines.map((line, index) => (
-                        <div key={index} className="flex gap-4 items-center p-4 border border-gray-200 rounded-lg">
-                          <div className="flex-1">
-                            <select
-                              value={line.cylinder_type_id}
-                              onChange={(e) => updateOrderLine(index, 'cylinder_type_id', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value={0}>Select Cylinder Type</option>
-                              {cylinderTypes.map(cylinder => (
-                                <option key={cylinder.CylinderTypeId} value={cylinder.CylinderTypeId}>
-                                  {cylinder.Capacity}
-                                </option>
-                              ))}
-                            </select>
+                      {orderLines.map((line, index) => {
+                        const available = inventoryAvailability[line.cylinder_type_id] || 0;
+                        const isInsufficient = line.ordered_qty > 0 && available < line.ordered_qty;
+                        const cylinderTypeName = cylinderTypes.find(ct => ct.CylinderTypeId === line.cylinder_type_id)?.Capacity || '';
+                        
+                        return (
+                          <div key={index} className={`p-4 border rounded-lg ${isInsufficient ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                            <div className="flex gap-4 items-center">
+                              <div className="flex-1">
+                                <select
+                                  value={line.cylinder_type_id}
+                                  onChange={(e) => updateOrderLine(index, 'cylinder_type_id', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value={0}>Select Cylinder Type</option>
+                                  {cylinderTypes.map(cylinder => (
+                                    <option key={cylinder.CylinderTypeId} value={cylinder.CylinderTypeId}>
+                                      {cylinder.Capacity}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="w-24">
+                                <input
+                                  type="number"
+                                  placeholder="Qty"
+                                  value={line.ordered_qty}
+                                  onChange={(e) => updateOrderLine(index, 'ordered_qty', Number(e.target.value))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  min="1"
+                                />
+                              </div>
+                              <div className="w-24">
+                                <input
+                                  type="number"
+                                  placeholder="Rate"
+                                  value={line.rate_applied}
+                                  readOnly
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                                  step="0.01"
+                                  min="0"
+                                />
+                              </div>
+                              <div className="w-32 text-right font-medium">
+                                ₹{(line.ordered_qty * line.rate_applied).toFixed(2)}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeOrderLine(index)}
+                                className="text-red-600 hover:text-red-800 p-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            {/* Inventory Availability Indicator */}
+                            {line.cylinder_type_id > 0 && line.ordered_qty > 0 && (
+                              <div className="mt-3 flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Available:</span>
+                                <span className={`text-sm font-medium ${isInsufficient ? 'text-red-600' : 'text-green-600'}`}>
+                                  {available} cylinders
+                                </span>
+                                {isInsufficient && (
+                                  <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
+                                    Short by {line.ordered_qty - available} cylinders
+                                  </span>
+                                )}
+                                {isCheckingInventory && (
+                                  <span className="text-xs text-gray-500">Checking...</span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="w-24">
-                            <input
-                              type="number"
-                              placeholder="Qty"
-                              value={line.ordered_qty}
-                              onChange={(e) => updateOrderLine(index, 'ordered_qty', Number(e.target.value))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              min="1"
-                            />
-                          </div>
-                          <div className="w-24">
-                            <input
-                              type="number"
-                              placeholder="Rate"
-                              value={line.rate_applied}
-                              readOnly
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                              step="0.01"
-                              min="0"
-                            />
-                          </div>
-                          <div className="w-32 text-right font-medium">
-                            ₹{(line.ordered_qty * line.rate_applied).toFixed(2)}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeOrderLine(index)}
-                            className="text-red-600 hover:text-red-800 p-2"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -640,6 +748,34 @@ export default function DeliveryOrdersPage() {
                           ₹{orderLines.reduce((sum, line) => sum + (line.ordered_qty * line.rate_applied), 0).toFixed(2)}
                         </span>
                       </div>
+                      
+                      {/* Inventory Status Summary */}
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="font-semibold text-sm mb-2">Inventory Status</h4>
+                        {orderLines.filter(line => line.cylinder_type_id > 0 && line.ordered_qty > 0).map((line, index) => {
+                          const available = inventoryAvailability[line.cylinder_type_id] || 0;
+                          const isInsufficient = available < line.ordered_qty;
+                          const cylinderTypeName = cylinderTypes.find(ct => ct.CylinderTypeId === line.cylinder_type_id)?.Capacity || `Type ${line.cylinder_type_id}`;
+                          
+                          return (
+                            <div key={index} className="flex justify-between items-center text-sm py-1">
+                              <span className="text-gray-600">{cylinderTypeName}:</span>
+                              <div className="flex items-center gap-2">
+                                <span className={isInsufficient ? 'text-red-600 font-medium' : 'text-green-600'}>
+                                  {available} available
+                                </span>
+                                <span className="text-gray-400">/</span>
+                                <span>{line.ordered_qty} requested</span>
+                                {isInsufficient && (
+                                  <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
+                                    Short by {line.ordered_qty - available}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -655,9 +791,14 @@ export default function DeliveryOrdersPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    disabled={isCheckingInventory || !validateInventoryForOrder().isValid}
+                    className={`px-6 py-2 rounded-lg font-medium ${
+                      isCheckingInventory || !validateInventoryForOrder().isValid
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
                   >
-                    Create Order
+                    {isCheckingInventory ? 'Checking Inventory...' : 'Create Order'}
                   </button>
                 </div>
               </form>

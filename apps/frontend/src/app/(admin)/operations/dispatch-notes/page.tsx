@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Truck, Users, Calendar, FileText, RefreshCw, Save, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
+import { Plus, Search, Eye, Truck, Users, Calendar, FileText, RefreshCw, Save, CheckCircle, XCircle, PlusCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { deliveryOrderApi } from '@/lib/api/deliveryOrderApi';
 import { cylinderExchangeApi } from '@/lib/api/cylinderExchangeApi';
@@ -60,6 +60,7 @@ export default function DispatchNotesPage() {
   const [drivers, setDrivers] = useState<DriverMaster[]>([]);
   const [exchangeTracking, setExchangeTracking] = useState<OrderExchangeTracking[]>([]);
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
+  const [exchangeVerifications, setExchangeVerifications] = useState<Record<number, OrderExchangeTracking>>({});
 
   useEffect(() => {
     fetchOrders();
@@ -107,6 +108,13 @@ export default function DispatchNotesPage() {
     try {
       const response = await cylinderExchangeApi.getExchangeTracking();
       setExchangeTracking(response);
+      
+      // Create verification map for easy lookup
+      const verificationMap: Record<number, OrderExchangeTracking> = {};
+      response.forEach(exchange => {
+        verificationMap[exchange.order_id] = exchange;
+      });
+      setExchangeVerifications(verificationMap);
     } catch (error) {
       console.error('Failed to fetch exchange tracking:', error);
     }
@@ -267,20 +275,7 @@ export default function DispatchNotesPage() {
             <Truck className="w-4 h-4" />
             Create Dispatch
           </button>
-          <button
-            onClick={() => setShowExchangeModal(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Record Exchange
-          </button>
-          <button
-            onClick={() => setShowReconciliationModal(true)}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-purple-700"
-          >
-            <FileText className="w-4 h-4" />
-            Daily Reconciliation
-          </button>
+         
         </div>
       </div>
 
@@ -338,6 +333,7 @@ export default function DispatchNotesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exchange Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -361,6 +357,19 @@ export default function DispatchNotesPage() {
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.order_status)}`}>
                         {ORDER_STATUSES.find(s => s.value === order.order_status)?.label}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {exchangeVerifications[order.order_id] ? (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-xs text-green-800 font-medium">Verified</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                          <span className="text-xs text-yellow-800 font-medium">Pending</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(order.requested_delivery_date).toLocaleDateString()}
@@ -404,101 +413,9 @@ export default function DispatchNotesPage() {
       </div>
 
       {/* Exchange Tracking */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">Exchange Tracking</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order #</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filled Delivered</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empty Collected</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Empty</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variance</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acknowledged</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {exchangeTracking.map((exchange) => (
-                <tr key={exchange.exchange_id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{exchange.order_id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{exchange.filled_delivered}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{exchange.empty_collected}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{exchange.expected_empty}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{exchange.variance_qty}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getVarianceColor(exchange.variance_type)}`}>
-                      {exchange.variance_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {exchange.customer_acknowledged ? (
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-600" />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    
 
-      {/* Daily Reconciliations */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">Daily Reconciliations</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Orders</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shortages</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excess</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {reconciliations.map((recon) => (
-                <tr key={recon.reconciliation_id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recon.plan_id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(recon.reconciliation_date).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recon.total_orders}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recon.total_shortages}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recon.total_excess}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(recon.status)}`}>
-                      {RECONCILIATION_STATUSES.find(s => s.value === recon.status)?.label}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setReconciliationData({
-                          ...reconciliationData,
-                          plan_id: recon.plan_id
-                        });
-                        setShowInventoryModal(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      Count Inventory
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+ 
 
       {/* Dispatch Modal */}
       {showDispatchModal && (
@@ -730,12 +647,7 @@ export default function DispatchNotesPage() {
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={handleRecordExchange}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    Record Exchange
-                  </button>
+               
                 </div>
               </div>
             </div>

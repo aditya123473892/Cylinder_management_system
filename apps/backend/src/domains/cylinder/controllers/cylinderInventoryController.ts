@@ -242,4 +242,95 @@ export class CylinderInventoryController {
       });
     }
   }
+
+  async createMovement(req: Request, res: Response): Promise<Response> {
+    try {
+      const {
+        cylinderTypeId,
+        fromLocationType,
+        fromLocationReferenceId,
+        toLocationType,
+        toLocationReferenceId,
+        quantity,
+        cylinderStatus,
+        movementType,
+        referenceTransactionId,
+        notes
+      } = req.body;
+
+      // Validate required fields
+      if (!cylinderTypeId || !toLocationType || !quantity || !cylinderStatus) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: cylinderTypeId, toLocationType, quantity, cylinderStatus'
+        });
+      }
+
+      // Validate quantity
+      if (quantity <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quantity must be greater than 0'
+        });
+      }
+
+      // Validate cylinder status
+      const validStatuses = ['FILLED', 'EMPTY'];
+      if (!validStatuses.includes(cylinderStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid cylinder status. Must be one of: ${validStatuses.join(', ')}`
+        });
+      }
+
+      // Validate location types
+      const validLocationTypes = ['YARD', 'PLANT', 'CUSTOMER', 'VEHICLE', 'REFILLING'];
+      if (fromLocationType && !validLocationTypes.includes(fromLocationType)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid from location type. Must be one of: ${validLocationTypes.join(', ')}`
+        });
+      }
+      if (!validLocationTypes.includes(toLocationType)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid to location type. Must be one of: ${validLocationTypes.join(', ')}`
+        });
+      }
+
+      // Validate that user is authenticated
+      if (!req.user?.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required for creating movements'
+        });
+      }
+
+      const result = await this.inventoryService.createMovement({
+        cylinderTypeId,
+        fromLocationType,
+        fromLocationReferenceId,
+        toLocationType,
+        toLocationReferenceId,
+        quantity,
+        cylinderStatus,
+        movementType,
+        referenceTransactionId,
+        notes,
+        movedBy: req.user.userId
+      });
+
+      return res.json({
+        success: true,
+        data: result,
+        message: 'Movement created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating movement:', error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create movement'
+      });
+    }
+  }
 }

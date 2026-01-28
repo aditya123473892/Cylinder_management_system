@@ -25,7 +25,11 @@ export class CylinderInventoryRepository {
       request = request.input('locationType', sql.VarChar, query.locationType);
     }
 
-    if (query.referenceId !== undefined) {
+    if (query.referenceId === undefined) {
+      // For YARD, PLANT, REFILLING locations where referenceId is null
+      whereConditions.push('cli.location_reference_id IS NULL');
+    } else if (query.referenceId !== null) {
+      // For CUSTOMER, VEHICLE locations with specific referenceId
       whereConditions.push('cli.location_reference_id = @referenceId');
       request = request.input('referenceId', sql.Int, query.referenceId);
     }
@@ -41,8 +45,7 @@ export class CylinderInventoryRepository {
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
-    const result = await request.query(`
+    const sqlQuery = `
       SELECT
         cli.inventory_id,
         cli.cylinder_type_id,
@@ -58,7 +61,9 @@ export class CylinderInventoryRepository {
       INNER JOIN CYLINDER_TYPE_MASTER ct ON cli.cylinder_type_id = ct.CylinderTypeId
       ${whereClause}
       ORDER BY cli.cylinder_type_id, cli.location_type, cli.cylinder_status
-    `);
+    `;
+
+    const result = await request.query(sqlQuery);
 
     return result.recordset.map(row => ({
       inventoryId: row.inventory_id,
@@ -125,7 +130,7 @@ export class CylinderInventoryRepository {
   async updateInventory(
     cylinderTypeId: number,
     locationType: LocationType,
-    locationReferenceId: number | null,
+    referenceId: number | null,
     cylinderStatus: CylinderStatus,
     quantityChange: number,
     updatedBy: number
@@ -133,27 +138,11 @@ export class CylinderInventoryRepository {
     const pool = await this.getPool();
 
     try {
-      // Get location reference name if needed
-      let locationReferenceName: string | null = null;
-      if (locationReferenceId) {
-        if (locationType === 'CUSTOMER') {
-          const customerResult = await pool.request()
-            .input('id', sql.Int, locationReferenceId)
-            .query('SELECT CustomerName FROM CUSTOMER_MASTER WHERE CustomerId = @id');
-          locationReferenceName = customerResult.recordset[0]?.CustomerName || null;
-        } else if (locationType === 'VEHICLE') {
-          const vehicleResult = await pool.request()
-            .input('id', sql.Int, locationReferenceId)
-            .query('SELECT vehicle_number FROM VEHICLE_MASTER WHERE vehicle_id = @id');
-          locationReferenceName = vehicleResult.recordset[0]?.vehicle_number || null;
-        }
-      }
-
       // Check if inventory record exists
       const existingResult = await pool.request()
         .input('cylinderTypeId', sql.Int, cylinderTypeId)
         .input('locationType', sql.VarChar, locationType)
-        .input('referenceId', sql.Int, locationReferenceId)
+        .input('referenceId', referenceId || null)
         .input('cylinderStatus', sql.VarChar, cylinderStatus)
         .query(`
           SELECT inventory_id, quantity FROM CYLINDER_LOCATION_INVENTORY
@@ -189,8 +178,8 @@ export class CylinderInventoryRepository {
         await pool.request()
           .input('cylinderTypeId', sql.Int, cylinderTypeId)
           .input('locationType', sql.VarChar, locationType)
-          .input('referenceId', sql.Int, locationReferenceId)
-          .input('referenceName', sql.VarChar, locationReferenceName)
+          .input('referenceId', referenceId || null)
+          .input('referenceName', null) // Skip reference name lookup for now
           .input('cylinderStatus', sql.VarChar, cylinderStatus)
           .input('quantity', sql.Int, quantityChange)
           .input('updatedBy', sql.Int, updatedBy)
@@ -311,5 +300,52 @@ export class CylinderInventoryRepository {
       `);
 
     return result.recordset;
+  }
+
+  async createMovement(data: {
+    cylinderTypeId: number;
+    fromLocationType?: string;
+    fromLocationReferenceId?: number;
+    toLocationType: string;
+    toLocationReferenceId?: number;
+    quantity: number;
+    cylinderStatus: string;
+    movementType?: string;
+    referenceTransactionId?: number;
+    movedBy: number;
+    notes?: string;
+  }): Promise<number> {
+    const pool = await this.getPool();
+    const request = pool.request();
+
+    const result = await request
+      .input('cylinder_type_id', sql.BigInt, data.cylinderTypeId)
+      .input('from_location_type', data.fromLocationType || null)
+      .input('from_location_reference_id', data.fromLocationReferenceId || null)
+      .input('to_location_type', sql.VarChar, data.toLocationType)
+      .input('to_location_reference_id', data.toLocationReferenceId || null)
+      .input('quantity', sql.Int, data.quantity)
+      .input('cylinder_status', sql.VarChar, data.cylinderStatus)
+      .input('movement_type', data.movementType || null)
+      .input('reference_transaction_id', data.referenceTransactionId || null)
+      .input('moved_by', sql.Int, data.movedBy)
+      .input('notes', data.notes || null)
+      .query(`
+        INSERT INTO CYLINDER_MOVEMENT_LOG (
+          cylinder_type_id, from_location_type, from_location_reference_id,
+          from_cylinder_status, to_location_type, to_location_reference_id,
+          to_cylinder_status, quantity, movement_type, reference_transaction_id,
+          moved_by, movement_date, notes
+        )
+        OUTPUT INSERTED.movement_id
+        VALUES (
+          @cylinder_type_id, @from_location_type, @from_location_reference_id,
+          @cylinder_status, @to_location_type, @to_location_reference_id,
+          @cylinder_status, @quantity, @movement_type, @reference_transaction_id,
+          @moved_by, GETDATE(), @notes
+        )
+      `);
+
+    return result.recordset[0].movement_id;
   }
 }
