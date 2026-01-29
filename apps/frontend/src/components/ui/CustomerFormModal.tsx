@@ -32,6 +32,9 @@ export function CustomerFormModal({
     CreatedBy: null,
     AadhaarImage: null,
     PanImage: null,
+    GSTNumber: null,
+    StateCode: null,
+    BillingAddress: null,
   });
 
   const [locations, setLocations] = useState<LocationMaster[]>([]);
@@ -69,6 +72,9 @@ export function CustomerFormModal({
         CreatedBy: customer.CreatedBy,
         AadhaarImage: customer.AadhaarImage,
         PanImage: customer.PanImage,
+        GSTNumber: customer.GSTNumber,
+        StateCode: customer.StateCode,
+        BillingAddress: customer.BillingAddress,
       });
 
       // Format base64 strings as data URLs for image preview
@@ -112,6 +118,9 @@ export function CustomerFormModal({
         CreatedBy: null,
         AadhaarImage: null,
         PanImage: null,
+        GSTNumber: null,
+        StateCode: null,
+        BillingAddress: null,
       });
       setAadhaarPreview(null);
       setPanPreview(null);
@@ -333,6 +342,51 @@ export function CustomerFormModal({
                   {errors.Location && (
                     <p className="mt-1 text-sm text-red-600">{errors.Location}</p>
                   )}
+                </div>
+
+                {/* GST Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    GST Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.GSTNumber || ''}
+                    onChange={(e) => handleInputChange('GSTNumber', e.target.value || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter GST number (15 digits)"
+                    maxLength={15}
+                  />
+                </div>
+
+                {/* State Code */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State Code
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.StateCode || ''}
+                    onChange={(e) => handleInputChange('StateCode', e.target.value.toUpperCase() || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter state code (2 letters)"
+                    maxLength={2}
+                  />
+                </div>
+
+                {/* Billing Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Billing Address
+                  </label>
+                  <textarea
+                    value={formData.BillingAddress || ''}
+                    onChange={(e) => handleInputChange('BillingAddress', e.target.value || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter billing address"
+                    rows={3}
+                    maxLength={500}
+                  />
                 </div>
 
                 {/* IsActive */}

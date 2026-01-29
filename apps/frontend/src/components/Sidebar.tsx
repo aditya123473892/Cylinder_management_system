@@ -60,6 +60,10 @@ const navigationItems = [
         name: 'Delivery Reports',
         href: '/operations/delivery-reports',
       },
+      {
+        name :'Dispatch orders',
+        href: '/operations/dispatch-orders-final',
+      },
     ],
   },
   {

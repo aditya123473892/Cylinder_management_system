@@ -125,14 +125,26 @@ export class CylinderInventoryController {
 
       // Aggregate data by location
       summary.forEach(item => {
-        item.locations.YARD && Object.assign(dashboardData.byLocation.yard, item.locations.YARD);
-        item.locations.PLANT && Object.assign(dashboardData.byLocation.plant, item.locations.PLANT);
+        item.locations.YARD && (
+          dashboardData.byLocation.yard.filled += item.locations.YARD.filled,
+          dashboardData.byLocation.yard.empty += item.locations.YARD.empty,
+          dashboardData.byLocation.yard.total += item.locations.YARD.total
+        );
+        item.locations.PLANT && (
+          dashboardData.byLocation.plant.filled += item.locations.PLANT.filled,
+          dashboardData.byLocation.plant.empty += item.locations.PLANT.empty,
+          dashboardData.byLocation.plant.total += item.locations.PLANT.total
+        );
         item.locations.CUSTOMER && (
           dashboardData.byLocation.customers.filled += item.locations.CUSTOMER.filled,
           dashboardData.byLocation.customers.empty += item.locations.CUSTOMER.empty,
           dashboardData.byLocation.customers.total += item.locations.CUSTOMER.total
         );
-        item.locations.VEHICLE && Object.assign(dashboardData.byLocation.vehicles, item.locations.VEHICLE);
+        item.locations.VEHICLE && (
+          dashboardData.byLocation.vehicles.filled += item.locations.VEHICLE.filled,
+          dashboardData.byLocation.vehicles.empty += item.locations.VEHICLE.empty,
+          dashboardData.byLocation.vehicles.total += item.locations.VEHICLE.total
+        );
       });
 
       // Generate alerts for low inventory

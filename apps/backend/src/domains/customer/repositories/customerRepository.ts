@@ -10,7 +10,7 @@ export class CustomerRepository {
   async findAll(): Promise<CustomerMaster[]> {
     const pool = await this.getPool();
     const result = await pool.request().query(`
-      SELECT CustomerId, CustomerName, ParentDealerId, Location, IsActive, AadhaarImage, PanImage, CreatedAt, CreatedBy
+      SELECT CustomerId, CustomerName, ParentDealerId, Location, IsActive, AadhaarImage, PanImage, GSTNumber, StateCode, BillingAddress, CreatedAt, CreatedBy
       FROM dbo.CUSTOMER_MASTER
       ORDER BY CustomerId
     `);
@@ -22,7 +22,7 @@ export class CustomerRepository {
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        SELECT CustomerId, CustomerName, ParentDealerId, Location, IsActive, AadhaarImage, PanImage, CreatedAt, CreatedBy
+        SELECT CustomerId, CustomerName, ParentDealerId, Location, IsActive, AadhaarImage, PanImage, GSTNumber, StateCode, BillingAddress, CreatedAt, CreatedBy
         FROM dbo.CUSTOMER_MASTER
         WHERE CustomerId = @id
       `);
@@ -37,12 +37,15 @@ export class CustomerRepository {
       .input('Location', sql.NVarChar(200), data.Location)
       .input('AadhaarImage', sql.VarBinary(sql.MAX), data.AadhaarImage ?? null)
       .input('PanImage', sql.VarBinary(sql.MAX), data.PanImage ?? null)
+      .input('GSTNumber', sql.VarChar(15), data.GSTNumber ?? null)
+      .input('StateCode', sql.VarChar(2), data.StateCode ?? null)
+      .input('BillingAddress', sql.VarChar(500), data.BillingAddress ?? null)
       .input('IsActive', sql.Bit, data.IsActive ?? true)
       .input('CreatedBy', sql.Int, data.CreatedBy ?? null)
       .query(`
-        INSERT INTO dbo.CUSTOMER_MASTER (CustomerName, ParentDealerId, Location, AadhaarImage, PanImage, IsActive, CreatedBy)
+        INSERT INTO dbo.CUSTOMER_MASTER (CustomerName, ParentDealerId, Location, AadhaarImage, PanImage, GSTNumber, StateCode, BillingAddress, IsActive, CreatedBy)
         OUTPUT INSERTED.*
-        VALUES (@CustomerName, @ParentDealerId, @Location, @AadhaarImage, @PanImage, @IsActive, @CreatedBy)
+        VALUES (@CustomerName, @ParentDealerId, @Location, @AadhaarImage, @PanImage, @GSTNumber, @StateCode, @BillingAddress, @IsActive, @CreatedBy)
       `);
     return result.recordset[0];
   }
@@ -72,6 +75,18 @@ export class CustomerRepository {
     if (data.PanImage !== undefined) {
       updates.push('PanImage = @PanImage');
       request.input('PanImage', sql.VarBinary(sql.MAX), data.PanImage);
+    }
+    if (data.GSTNumber !== undefined) {
+      updates.push('GSTNumber = @GSTNumber');
+      request.input('GSTNumber', sql.VarChar(15), data.GSTNumber);
+    }
+    if (data.StateCode !== undefined) {
+      updates.push('StateCode = @StateCode');
+      request.input('StateCode', sql.VarChar(2), data.StateCode);
+    }
+    if (data.BillingAddress !== undefined) {
+      updates.push('BillingAddress = @BillingAddress');
+      request.input('BillingAddress', sql.VarChar(500), data.BillingAddress);
     }
     if (data.IsActive !== undefined) {
       updates.push('IsActive = @IsActive');

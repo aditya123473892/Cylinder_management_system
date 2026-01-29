@@ -6,6 +6,9 @@ export interface CustomerMaster {
   IsActive: boolean;
   AadhaarImage: string | null;
   PanImage: string | null;
+  GSTNumber: string | null;
+  StateCode: string | null;
+  BillingAddress: string | null;
   CreatedAt: string;
   CreatedBy: number | null;
 }
@@ -16,6 +19,9 @@ export interface CreateCustomerRequest {
   Location: string;
   AadhaarImage?: string | null;
   PanImage?: string | null;
+  GSTNumber?: string | null;
+  StateCode?: string | null;
+  BillingAddress?: string | null;
   IsActive?: boolean;
   CreatedBy?: number | null;
 }
@@ -26,6 +32,9 @@ export interface UpdateCustomerRequest {
   Location?: string;
   AadhaarImage?: string | null;
   PanImage?: string | null;
+  GSTNumber?: string | null;
+  StateCode?: string | null;
+  BillingAddress?: string | null;
   IsActive?: boolean;
   CreatedBy?: number | null;
 }

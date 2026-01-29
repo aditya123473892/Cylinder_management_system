@@ -58,8 +58,7 @@ export default function InventoryPage() {
 
       setDashboard(dashboardRes.data);
       setCylinderTypes(cylinderTypesRes);
-      console.log('Customers data:', customersRes); // Debug
-      console.log('Vehicles data:', vehiclesRes); // Debug
+   
       setCustomers(customersRes);
       setVehicles(vehiclesRes);
 
@@ -142,7 +141,6 @@ export default function InventoryPage() {
     // Use the correct field name based on CustomerMaster type
     const customer = customers.find(c => c.CustomerId === referenceId);
     
-    console.log('Customer lookup:', { referenceId, customers: customers.length, found: customer, sampleCustomer: customers[0] });
     
     if (customer) {
       // Use the correct field name for customer name
@@ -158,7 +156,6 @@ export default function InventoryPage() {
     // Use the correct field name based on VehicleMaster type
     const vehicle = vehicles.find(v => v.vehicle_id === referenceId);
     
-    console.log('Vehicle lookup:', { referenceId, vehicles: vehicles.length, found: vehicle, sampleVehicle: vehicles[0] });
     
     if (vehicle) {
       // Use the correct field name for vehicle number

@@ -380,6 +380,7 @@ export class DeliveryOrderService {
     } catch (error) {
       await this.pool.query('ROLLBACK TRANSACTION');
       throw error;
+   
     }
   }
 
