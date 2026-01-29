@@ -83,6 +83,11 @@ export class CylinderInventoryService {
         errors.push('Movement quantity must be greater than 0');
       }
 
+      // BUSINESS RULE: Empty cylinders should not be stored with customers
+      if (movement.toLocation.type === 'CUSTOMER' && movement.toLocation.status === 'EMPTY') {
+        errors.push('Business rule violation: Empty cylinders cannot be stored with customers. Empty cylinders should be moved to YARD or PLANT for refilling.');
+      }
+
       // Validate movement type and status consistency
       const validation = this.validateMovementTypeAndStatus(movement);
       if (!validation.isValid) {
@@ -299,6 +304,48 @@ export class CylinderInventoryService {
     updatedBy: number
   ): Promise<any> {
     try {
+      // SAFEGUARD: Prevent phantom cylinder generation
+      if (locationType === 'YARD' && !referenceId) {
+        // Check for suspicious patterns that indicate phantom cylinder generation
+        for (const cylinder of cylinders) {
+          if (cylinder.quantity === 100) {
+            console.warn(`⚠️  SUSPICIOUS: Attempting to initialize exactly 100 cylinders for type ${cylinder.cylinderTypeId} in YARD`);
+            console.warn('This pattern indicates phantom cylinder generation. Please verify physical inventory before proceeding.');
+            
+            // Log this suspicious activity
+            await this.repository.logMovement({
+              cylinderTypeId: cylinder.cylinderTypeId,
+              fromLocation: { type: 'SYSTEM' as LocationType, status: 'FILLED' as CylinderStatus },
+              toLocation: { type: 'SYSTEM' as LocationType, status: 'FILLED' as CylinderStatus },
+              quantity: cylinder.quantity,
+              movementType: 'SUSPICIOUS_INITIALIZATION' as MovementType,
+              referenceTransactionId: undefined,
+              movedBy: updatedBy,
+              notes: `SUSPICIOUS: Attempted phantom cylinder initialization - ${cylinder.quantity} units for cylinder type ${cylinder.cylinderTypeId}`
+            });
+          }
+          
+          // Additional safeguard: Prevent large bulk additions without verification
+          if (cylinder.quantity > 50) {
+            console.warn(`⚠️  SAFEGUARD: Large quantity initialization detected - ${cylinder.quantity} cylinders`);
+            console.warn('Physical inventory verification required for quantities > 50');
+            
+            // In a production system, you might want to throw an error here
+            // For now, we'll log it and continue with admin oversight
+            await this.repository.logMovement({
+              cylinderTypeId: cylinder.cylinderTypeId,
+              fromLocation: { type: 'SYSTEM' as LocationType, status: 'FILLED' as CylinderStatus },
+              toLocation: { type: 'SYSTEM' as LocationType, status: 'FILLED' as CylinderStatus },
+              quantity: cylinder.quantity,
+              movementType: 'LARGE_INITIALIZATION' as MovementType,
+              referenceTransactionId: undefined,
+              movedBy: updatedBy,
+              notes: `SAFEGUARD: Large quantity initialization - ${cylinder.quantity} cylinders for type ${cylinder.cylinderTypeId}. Physical verification required.`
+            });
+          }
+        }
+      }
+
       const results = [];
 
       for (const cylinder of cylinders) {

@@ -1,6 +1,6 @@
 export type CylinderStatus = 'FILLED' | 'EMPTY';
 
-export type LocationType = 'YARD' | 'VEHICLE' | 'CUSTOMER' | 'PLANT' | 'REFILLING';
+export type LocationType = 'YARD' | 'VEHICLE' | 'CUSTOMER' | 'PLANT' | 'REFILLING' | 'SYSTEM';
 
 export type MovementType =
   | 'DELIVERY_FILLED'     // Filled cylinders delivered to customer
@@ -10,7 +10,10 @@ export type MovementType =
   | 'REFILLING_IN'        // Empty cylinders entering refilling
   | 'REFILLING_OUT'       // Filled cylinders exiting refilling
   | 'ADJUSTMENT'          // Manual inventory adjustments
-  | 'TRANSFER';           // Movement between internal locations
+  | 'TRANSFER'           // Movement between internal locations
+  | 'SUSPICIOUS_INITIALIZATION'  // Phantom cylinder generation detected
+  | 'LARGE_INITIALIZATION'       // Large quantity initialization detected
+  | 'INITIALIZATION_REVIEW';      // System review for initialization
 
 export interface InventoryLocation {
   type: LocationType;

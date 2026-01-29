@@ -38,12 +38,13 @@ export default function InventoryPage() {
     }
   }, [filters]);
 
-  useEffect(() => {
-    if (Object.keys(filters).length > 0 && inventoryItems.length > 0) {
-      const calculatedDashboard = calculateDashboardFromItems(inventoryItems);
-      setDashboard(calculatedDashboard);
-    }
-  }, [inventoryItems, filters]);
+  // Remove the dashboard recalculation - let the API handle totals correctly
+  // useEffect(() => {
+  //   if (Object.keys(filters).length > 0 && inventoryItems.length > 0) {
+  //     const calculatedDashboard = calculateDashboardFromItems(inventoryItems);
+  //     setDashboard(calculatedDashboard);
+  //   }
+  // }, [inventoryItems, filters]);
 
   const loadInitialData = async () => {
     try {
@@ -57,6 +58,8 @@ export default function InventoryPage() {
 
       setDashboard(dashboardRes.data);
       setCylinderTypes(cylinderTypesRes);
+      console.log('Customers data:', customersRes); // Debug
+      console.log('Vehicles data:', vehiclesRes); // Debug
       setCustomers(customersRes);
       setVehicles(vehiclesRes);
 
@@ -75,6 +78,10 @@ export default function InventoryPage() {
       setFilterLoading(true);
       const response = await cylinderInventoryApi.getInventory(filters);
       setInventoryItems(response.data);
+      
+      // Load system dashboard totals (not filtered) to show correct overall picture
+      const dashboardResponse = await cylinderInventoryApi.getInventoryDashboard();
+      setDashboard(dashboardResponse.data);
     } catch (error) {
       toast.error('Failed to load filtered inventory');
       console.error('Error loading filtered inventory:', error);
@@ -127,6 +134,91 @@ export default function InventoryPage() {
       case 'vehicle': return <Truck className="w-4 h-4 text-purple-600" />;
       default: return <Package className="w-4 h-4 text-gray-600" />;
     }
+  };
+
+  const getCustomerName = (referenceId: number | null | undefined): string | null => {
+    if (!referenceId) return null;
+    
+    // Use the correct field name based on CustomerMaster type
+    const customer = customers.find(c => c.CustomerId === referenceId);
+    
+    console.log('Customer lookup:', { referenceId, customers: customers.length, found: customer, sampleCustomer: customers[0] });
+    
+    if (customer) {
+      // Use the correct field name for customer name
+      return customer.CustomerName || `Customer ${referenceId}`;
+    }
+    
+    return null;
+  };
+
+  const getVehicleName = (referenceId: number | null | undefined): string | null => {
+    if (!referenceId) return null;
+    
+    // Use the correct field name based on VehicleMaster type
+    const vehicle = vehicles.find(v => v.vehicle_id === referenceId);
+    
+    console.log('Vehicle lookup:', { referenceId, vehicles: vehicles.length, found: vehicle, sampleVehicle: vehicles[0] });
+    
+    if (vehicle) {
+      // Use the correct field name for vehicle number
+      return vehicle.vehicle_number || `Vehicle ${referenceId}`;
+    }
+    
+    return null;
+  };
+
+  const getLocationDisplayName = (item: InventoryItem): string => {
+    const locationType = item.locationType.toLowerCase();
+    
+    if (locationType === 'customer') {
+      // First try to use the reference name from the item
+      if (item.locationReferenceName) {
+        return `Customer: ${item.locationReferenceName}`;
+      }
+      // If no reference name but we have filters applied, try to find from customers array
+      if (filters.locationType === 'CUSTOMER' && filters.referenceId) {
+        const customerName = getCustomerName(filters.referenceId);
+        if (customerName) {
+          return `Customer: ${customerName}`;
+        }
+      }
+      // If we have a reference ID, try to find the customer name
+      if (item.locationReferenceId) {
+        const customerName = getCustomerName(item.locationReferenceId);
+        if (customerName) {
+          return `Customer: ${customerName}`;
+        }
+      }
+      // Fallback to just showing customer type
+      return 'Customer';
+    }
+    
+    if (locationType === 'vehicle') {
+      // First try to use the reference name from the item
+      if (item.locationReferenceName) {
+        return `Vehicle: ${item.locationReferenceName}`;
+      }
+      // If no reference name but we have filters applied, try to find from vehicles array
+      if (filters.locationType === 'VEHICLE' && filters.referenceId) {
+        const vehicleName = getVehicleName(filters.referenceId);
+        if (vehicleName) {
+          return `Vehicle: ${vehicleName}`;
+        }
+      }
+      // If we have a reference ID, try to find the vehicle name
+      if (item.locationReferenceId) {
+        const vehicleName = getVehicleName(item.locationReferenceId);
+        if (vehicleName) {
+          return `Vehicle: ${vehicleName}`;
+        }
+      }
+      // Fallback to just showing vehicle type
+      return 'Vehicle';
+    }
+    
+    // For yard and plant, just capitalize the location type
+    return locationType.charAt(0).toUpperCase() + locationType.slice(1);
   };
 
   const calculateDashboardFromItems = (items: InventoryItem[]): InventoryDashboard => {
@@ -210,6 +302,18 @@ export default function InventoryPage() {
         </button>
       </div>
 
+      {/* Filter Indicator */}
+      {Object.keys(filters).length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center">
+            <Filter className="h-5 w-5 text-blue-600 mr-2" />
+            <span className="text-sm text-blue-800">
+              Filters applied: Showing {inventoryItems.length} filtered items from {dashboard?.totalCylinders || 0} total cylinders
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Dashboard Summary */}
       {dashboard && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -253,8 +357,8 @@ export default function InventoryPage() {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Plant (Empty)</dt>
-                    <dd className="text-lg font-medium text-orange-600">{dashboard.byLocation.plant.empty.toLocaleString()}</dd>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Yard (Empty)</dt>
+                    <dd className="text-lg font-medium text-orange-600">{dashboard.byLocation.yard.empty.toLocaleString()}</dd>
                   </dl>
                 </div>
               </div>
@@ -385,6 +489,11 @@ export default function InventoryPage() {
             </h3>
             <div className="text-sm text-gray-500">
               Showing {inventoryItems.length} cylinders
+              {process.env.NODE_ENV === 'development' && (
+                <span className="ml-2 text-xs text-gray-400">
+                  (Debug: Items loaded: {inventoryItems.length}, FilterLoading: {filterLoading ? 'true' : 'false'})
+                </span>
+              )}
             </div>
           </div>
 
@@ -404,7 +513,7 @@ export default function InventoryPage() {
                 {filterLoading ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center">
+                      <div className="flex items justify-center">
                         <Loader2 className="w-5 h-5 animate-spin text-blue-600 mr-2" />
                         Loading filtered results...
                       </div>
@@ -422,17 +531,32 @@ export default function InventoryPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center gap-2">
                           {getLocationIcon(item.locationType)}
-                          <span className="capitalize">
-                            {item.locationType.toLowerCase() === 'customer' && item.locationReferenceName
-                              ? `Customer: ${item.locationReferenceName}`
-                              : item.locationType.toLowerCase() === 'vehicle' && item.locationReferenceName
-                              ? `Vehicle: ${item.locationReferenceName}`
-                              : item.locationType.toLowerCase()}
+                          <span>
+                            {getLocationDisplayName(item)}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.locationReferenceName || '-'}
+                        {(() => {
+                          if (item.locationType.toLowerCase() === 'customer') {
+                            if (item.locationReferenceName) {
+                              return item.locationReferenceName;
+                            }
+                            if (item.locationReferenceId) {
+                              const customerName = getCustomerName(item.locationReferenceId);
+                              return customerName || `Customer ID: ${item.locationReferenceId}`;
+                            }
+                            return 'General Customer';
+                          }
+                          if (item.locationType.toLowerCase() === 'vehicle') {
+                            if (item.locationReferenceId) {
+                              const vehicleName = getVehicleName(item.locationReferenceId);
+                              return vehicleName || `Vehicle ID: ${item.locationReferenceId}`;
+                            }
+                            return 'General Vehicle';
+                          }
+                          return '-';
+                        })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.cylinderTypeName}

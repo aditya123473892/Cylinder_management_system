@@ -25,11 +25,8 @@ export class CylinderInventoryRepository {
       request = request.input('locationType', sql.VarChar, query.locationType);
     }
 
-    if (query.referenceId === undefined) {
-      // For YARD, PLANT, REFILLING locations where referenceId is null
-      whereConditions.push('cli.location_reference_id IS NULL');
-    } else if (query.referenceId !== null) {
-      // For CUSTOMER, VEHICLE locations with specific referenceId
+    if (query.referenceId !== undefined && query.referenceId !== null) {
+      // Only filter by referenceId if it's explicitly provided
       whereConditions.push('cli.location_reference_id = @referenceId');
       request = request.input('referenceId', sql.Int, query.referenceId);
     }

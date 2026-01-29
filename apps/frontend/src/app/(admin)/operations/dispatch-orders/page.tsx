@@ -131,24 +131,23 @@ export default function DispatchOrdersPage() {
           return;
         }
         
+        // Get the correct customer reference ID from the order
+        const actualCustomerReferenceId = orderDetails.customer_id;
+        
         // Create inventory movement transactions for each cylinder type in the order
-        const movementPromises = orderDetails.lines.map(line => {
-          const validation = validationResults.find((v: any) => v.cylinder_type_id === line.cylinder_type_id);
-          
-          // For single cylinder type orders, use empty_collected directly
-          // For multi-cylinder type orders, distribute proportionally
+        const movementPromises = orderDetails.lines.map(async (line) => {
           const emptyToReturn = orderDetails.lines.length === 1
             ? verification.empty_collected
             : Math.floor((verification.empty_collected * line.ordered_qty) / verification.expected_empty) || 0;
           
           const movements = [
-            // Move filled cylinders from VEHICLE to CUSTOMER
+            // Move filled cylinders from YARD to CUSTOMER
             cylinderInventoryApi.createMovement({
               cylinderTypeId: line.cylinder_type_id,
-              fromLocationType: 'VEHICLE',
-              fromLocationReferenceId: verification.order_id, // This should be the actual vehicle/plan ID
+              fromLocationType: 'YARD', // FIXED: Should take from YARD, not VEHICLE
+              fromLocationReferenceId: undefined, // YARD doesn't need reference ID
               toLocationType: 'CUSTOMER', 
-              toLocationReferenceId: verification.order_id,
+              toLocationReferenceId: actualCustomerReferenceId,
               quantity: line.delivered_qty || line.planned_qty || line.ordered_qty,
               cylinderStatus: 'FILLED',
               movementType: 'DELIVERY_FILLED',
@@ -158,26 +157,31 @@ export default function DispatchOrdersPage() {
           ];
           
           // Handle empty cylinder return with smart status conversion
-          if (emptyToReturn > 0 && validation) {
-            // First, convert FILLED cylinders to EMPTY if needed
-            const filledToConvert = Math.min(emptyToReturn - validation.availableEmpty, validation.availableFilled);
+          if (emptyToReturn > 0 && validationResults) {
+            // Find validation data for this cylinder type
+            const cylinderValidation = validationResults.find(v => v.cylinder_type_id === line.cylinder_type_id);
             
-            if (filledToConvert > 0) {
-              // Convert FILLED to EMPTY cylinders
-              movements.push(
-                cylinderInventoryApi.createMovement({
-                  cylinderTypeId: line.cylinder_type_id,
-                  fromLocationType: 'CUSTOMER',
-                  fromLocationReferenceId: verification.order_id,
-                  toLocationType: 'CUSTOMER',
-                  toLocationReferenceId: verification.order_id,
-                  quantity: filledToConvert,
-                  cylinderStatus: 'EMPTY',
-                  movementType: 'CONVERSION',
-                  referenceTransactionId: verification.exchange_id,
-                  notes: `Converted ${filledToConvert} ${line.cylinder_description} from FILLED to EMPTY for return via order ${verification.order_id}`
-                })
-              );
+            if (cylinderValidation) {
+              // First, convert FILLED cylinders to EMPTY if needed
+              const filledToConvert = Math.min(emptyToReturn - cylinderValidation.availableEmpty, cylinderValidation.availableFilled);
+              
+              if (filledToConvert > 0) {
+                // Convert FILLED to EMPTY cylinders
+                movements.push(
+                  cylinderInventoryApi.createMovement({
+                    cylinderTypeId: line.cylinder_type_id,
+                    fromLocationType: 'CUSTOMER',
+                    fromLocationReferenceId: actualCustomerReferenceId,
+                    toLocationType: 'CUSTOMER',
+                    toLocationReferenceId: actualCustomerReferenceId,
+                    quantity: filledToConvert,
+                    cylinderStatus: 'EMPTY',
+                    movementType: 'CONVERSION',
+                    referenceTransactionId: verification.exchange_id,
+                    notes: `Converted ${filledToConvert} ${line.cylinder_description} from FILLED to EMPTY for return via order ${verification.order_id}`
+                  })
+                );
+              }
             }
             
             // Then move empty cylinders to destination
@@ -185,14 +189,14 @@ export default function DispatchOrdersPage() {
               cylinderInventoryApi.createMovement({
                 cylinderTypeId: line.cylinder_type_id,
                 fromLocationType: 'CUSTOMER',
-                fromLocationReferenceId: verification.order_id,
+                fromLocationReferenceId: actualCustomerReferenceId,
                 toLocationType: emptyCylinderDestination,
                 toLocationReferenceId: emptyCylinderDestination === 'VEHICLE' ? verification.order_id : undefined,
                 quantity: emptyToReturn,
                 cylinderStatus: 'EMPTY',
                 movementType: 'RETURN_EMPTY',
                 referenceTransactionId: verification.exchange_id,
-                notes: `Collected ${line.cylinder_description} via order ${verification.order_id} - Stored in ${emptyCylinderDestination}`
+                notes: `Returned ${emptyToReturn} ${line.cylinder_description} from customer to ${emptyCylinderDestination} via order ${verification.order_id}`
               })
             );
           }
@@ -241,32 +245,44 @@ export default function DispatchOrdersPage() {
       let actualCustomerReferenceId = selectedOrder.customer_id;
       
       try {
-        const allCustomersInventory = await cylinderInventoryApi.getInventory({
-          locationType: 'CUSTOMER'
+        // Get inventory specifically for this order's customer
+        const customerInventory = await cylinderInventoryApi.getInventory({
+          locationType: 'CUSTOMER',
+          referenceId: selectedOrder.customer_id
         });
         
         // Check for data inconsistency and show fix if needed
-        if (allCustomersInventory.data && allCustomersInventory.data.length > 0) {
-          const actualCustomerData = allCustomersInventory.data[0];
+        if (customerInventory.data && customerInventory.data.length > 0) {
+          // Customer has inventory with their reference ID - this is correct
+          actualCustomerReferenceId = selectedOrder.customer_id;
+        } else {
+          // Try without reference ID (general customer inventory)
+          const allCustomersInventory = await cylinderInventoryApi.getInventory({
+            locationType: 'CUSTOMER'
+          });
           
-          // Handle case where inventory is stored with null reference ID (general customer inventory)
-          if (actualCustomerData.locationReferenceId === null || actualCustomerData.locationReferenceId === undefined) {
-            // This is valid - customer inventory is stored without specific reference ID
-            // Use the order's customer ID for the operations
-            actualCustomerReferenceId = selectedOrder.customer_id;
-          } else {
-            // Check for ID mismatch when reference ID exists
-            const hasIdMismatch = actualCustomerData.locationReferenceId !== selectedOrder.customer_id;
-            const hasNameMismatch = actualCustomerData.locationReferenceName !== selectedOrder.customer_name;
+          if (allCustomersInventory.data && allCustomersInventory.data.length > 0) {
+            const actualCustomerData = allCustomersInventory.data[0];
             
-            if (hasIdMismatch || hasNameMismatch) {
-              // Show data integrity issue and provide fix
-              toast.error(`Data integrity issue! Order customer ID (${selectedOrder.customer_id}) doesn't match inventory reference ID (${actualCustomerData.locationReferenceId}). Please run: UPDATE DELIVERY_ORDER SET customer_id = ${actualCustomerData.locationReferenceId}, customer_name = '${actualCustomerData.locationReferenceName}' WHERE order_id = ${selectedOrder.order_id};`, { duration: 10000 });
-              return false;
+            // Handle case where inventory is stored with null reference ID (general customer inventory)
+            if (actualCustomerData.locationReferenceId === null || actualCustomerData.locationReferenceId === undefined) {
+              // This is valid - customer inventory is stored without specific reference ID
+              // Use the order's customer ID for the operations
+              actualCustomerReferenceId = selectedOrder.customer_id;
+            } else {
+              // Check for ID mismatch when reference ID exists
+              const hasIdMismatch = actualCustomerData.locationReferenceId !== selectedOrder.customer_id;
+              const hasNameMismatch = actualCustomerData.locationReferenceName !== selectedOrder.customer_name;
+              
+              if (hasIdMismatch || hasNameMismatch) {
+                // Show data integrity issue and provide fix
+                toast.error(`Data integrity issue! Order customer ID (${selectedOrder.customer_id}) doesn't match inventory reference ID (${actualCustomerData.locationReferenceId}). Please run: UPDATE DELIVERY_ORDER SET customer_id = ${actualCustomerData.locationReferenceId}, customer_name = '${actualCustomerData.locationReferenceName}' WHERE order_id = ${selectedOrder.order_id};`, { duration: 10000 });
+                return false;
+              }
+              
+              // Use the verified customer ID
+              actualCustomerReferenceId = actualCustomerData.locationReferenceId!;
             }
-            
-            // Use the verified customer ID
-            actualCustomerReferenceId = actualCustomerData.locationReferenceId!;
           }
         }
         
