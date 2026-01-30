@@ -27,6 +27,18 @@ interface InventoryLine {
   cylinderStatus: 'FILLED' | 'EMPTY';
 }
 
+interface VehicleInventory {
+  vehicle_id: number;
+  vehicle_number: string;
+  inventory: Array<{
+    cylinderTypeId: number;
+    cylinderTypeName: string;
+    quantity: number;
+    cylinderStatus: 'FILLED' | 'EMPTY';
+  }>;
+  totalQuantity: number;
+}
+
 export default function InventoryInitializationPage() {
   const [customers, setCustomers] = useState<CustomerMaster[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMaster[]>([]);
@@ -39,13 +51,69 @@ export default function InventoryInitializationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  
+  // Vehicle inventory management states
+  const [vehicleInventoryList, setVehicleInventoryList] = useState<VehicleInventory[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleInventory | null>(null);
+  const [isMovingToPlant, setIsMovingToPlant] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
+    fetchVehicleInventory();
   }, []);
 
   const setLoadingState = (key: string, loading: boolean) => {
     setLoadingStates(prev => ({ ...prev, [key]: loading }));
+  };
+
+  const fetchVehicleInventory = async () => {
+    try {
+      setLoadingState('vehicleInventory', true);
+      
+      // Get all vehicles with inventory
+      const vehicleInventoryData = await cylinderInventoryApi.getInventory({
+        locationType: 'VEHICLE'
+      });
+      
+      if (vehicleInventoryData.data && vehicleInventoryData.data.length > 0) {
+        // Group inventory by vehicle
+        const vehicleGroups: Record<number, VehicleInventory> = {};
+        
+        vehicleInventoryData.data.forEach(item => {
+          const vehicleId = item.locationReferenceId;
+          if (!vehicleId) return;
+          
+          if (!vehicleGroups[vehicleId]) {
+            const vehicle = vehicles.find(v => v.vehicle_id === vehicleId);
+            vehicleGroups[vehicleId] = {
+              vehicle_id: vehicleId,
+              vehicle_number: vehicle?.vehicle_number || `Vehicle ${vehicleId}`,
+              inventory: [],
+              totalQuantity: 0
+            };
+          }
+          
+          const cylinderType = cylinderTypes.find(ct => ct.CylinderTypeId === item.cylinderTypeId);
+          vehicleGroups[vehicleId].inventory.push({
+            cylinderTypeId: item.cylinderTypeId,
+            cylinderTypeName: cylinderType?.Capacity || `Type ${item.cylinderTypeId}`,
+            quantity: item.quantity,
+            cylinderStatus: item.cylinderStatus as 'FILLED' | 'EMPTY'
+          });
+          
+          vehicleGroups[vehicleId].totalQuantity += item.quantity;
+        });
+        
+        setVehicleInventoryList(Object.values(vehicleGroups));
+      } else {
+        setVehicleInventoryList([]);
+      }
+    } catch (error) {
+      handleApiError(error, 'load vehicle inventory');
+      setVehicleInventoryList([]);
+    } finally {
+      setLoadingState('vehicleInventory', false);
+    }
   };
 
   const fetchInitialData = async () => {
@@ -80,6 +148,9 @@ export default function InventoryInitializationPage() {
         handleApiError(cylinderTypesData.reason, 'load cylinder types');
       }
 
+      // Fetch vehicle inventory after vehicles and cylinder types are loaded
+      await fetchVehicleInventory();
+
     } catch (error) {
       handleApiError(error, 'load initial data', 'Unable to load customers, vehicles, and cylinder types. Please check your internet connection and try again.');
     } finally {
@@ -87,6 +158,45 @@ export default function InventoryInitializationPage() {
       setLoadingState('customers', false);
       setLoadingState('vehicles', false);
       setLoadingState('cylinderTypes', false);
+    }
+  };
+
+  const moveVehicleToPlant = async () => {
+    if (!selectedVehicle) {
+      toast.error('Please select a vehicle');
+      return;
+    }
+
+    try {
+      setIsMovingToPlant(true);
+
+      // Create movements for each cylinder type in the vehicle
+      const movementPromises = selectedVehicle.inventory.map(async (item) => {
+        return await cylinderInventoryApi.createMovement({
+          cylinderTypeId: item.cylinderTypeId,
+          fromLocationType: 'VEHICLE',
+          fromLocationReferenceId: selectedVehicle.vehicle_id,
+          toLocationType: 'YARD',
+          toLocationReferenceId: undefined,
+          quantity: item.quantity,
+          cylinderStatus: item.cylinderStatus,
+          movementType: 'TRANSFER',
+          notes: `Moved ${item.quantity} ${item.cylinderTypeName} (${item.cylinderStatus}) from ${selectedVehicle.vehicle_number} to Yard`
+        });
+      });
+
+      await Promise.all(movementPromises);
+
+      toast.success(`Successfully moved ${selectedVehicle.totalQuantity} cylinders from ${selectedVehicle.vehicle_number} to Yard`);
+
+      // Refresh vehicle inventory
+      await fetchVehicleInventory();
+      setSelectedVehicle(null);
+
+    } catch (error) {
+      handleApiError(error, 'move cylinders to yard');
+    } finally {
+      setIsMovingToPlant(false);
     }
   };
 
@@ -340,6 +450,91 @@ export default function InventoryInitializationPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Vehicle Inventory Management */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Truck className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Move Cylinders from Vehicles to Yard</h3>
+            </div>
+
+            {loadingStates.vehicleInventory ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <p>Loading vehicle inventory...</p>
+              </div>
+            ) : vehicleInventoryList.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Truck className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No cylinders found in vehicles</p>
+                <p className="text-sm text-gray-400 mt-1">All vehicles are empty or no inventory data available</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Vehicle
+                  </label>
+                  <select
+                    value={selectedVehicle?.vehicle_id || ''}
+                    onChange={(e) => {
+                      const vehicle = vehicleInventoryList.find(v => v.vehicle_id === parseInt(e.target.value));
+                      setSelectedVehicle(vehicle || null);
+                    }}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select a vehicle with cylinders</option>
+                    {vehicleInventoryList.map((vehicle) => (
+                      <option key={vehicle.vehicle_id} value={vehicle.vehicle_id}>
+                        {vehicle.vehicle_number} ({vehicle.totalQuantity} cylinders)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedVehicle && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-900">{selectedVehicle.vehicle_number}</h4>
+                      <span className="text-sm text-gray-600">{selectedVehicle.totalQuantity} cylinders</span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      {selectedVehicle.inventory.map((item, index) => (
+                        <div key={index} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-700">{item.cylinderTypeName}</span>
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              item.cylinderStatus === 'FILLED' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {item.cylinderStatus}
+                            </span>
+                            <span className="font-medium">{item.quantity}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={moveVehicleToPlant}
+                      disabled={isMovingToPlant}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      <span>{isMovingToPlant ? 'Moving to Yard...' : 'Move All Cylinders to Yard'}</span>
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Cylinder Type Selection */}

@@ -84,6 +84,14 @@ class DeliveryOrderApiService {
     }
   }
 
+  async getOrderVehicleInfo(orderId: number): Promise<{ vehicle_id: number; vehicle_number: string }> {
+    const response = await this.request<{ vehicle_id: number; vehicle_number: string }>(`/api/delivery-orders/orders/${orderId}/vehicle`);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to fetch order vehicle information');
+    }
+    return response.data;
+  }
+
   // Delivery Planning API functions
   async createPlan(planData: CreateDeliveryPlanRequest): Promise<{ plan_id: number }> {
     const response = await this.request<{ plan_id: number }>('/api/delivery-orders/plans', {

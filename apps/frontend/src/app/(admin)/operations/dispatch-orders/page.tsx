@@ -134,6 +134,17 @@ export default function DispatchOrdersPage() {
         // Get the correct customer reference ID from the order
         const actualCustomerReferenceId = orderDetails.customer_id;
         
+        // Get vehicle information if empty cylinders are to be kept in vehicle
+        let vehicleInfo: { vehicle_id: number; vehicle_number: string } | null = null;
+        if (emptyCylinderDestination === 'VEHICLE') {
+          try {
+            vehicleInfo = await deliveryOrderApi.getOrderVehicleInfo(orderId);
+          } catch (error) {
+            console.error('Failed to get vehicle info:', error);
+            toast.error('Failed to get vehicle information, using order ID as fallback');
+          }
+        }
+        
         // Create inventory movement transactions for each cylinder type in the order
         const movementPromises = orderDetails.lines.map(async (line) => {
           const emptyToReturn = orderDetails.lines.length === 1
@@ -191,12 +202,14 @@ export default function DispatchOrdersPage() {
                 fromLocationType: 'CUSTOMER',
                 fromLocationReferenceId: actualCustomerReferenceId,
                 toLocationType: emptyCylinderDestination,
-                toLocationReferenceId: emptyCylinderDestination === 'VEHICLE' ? verification.order_id : undefined,
+                toLocationReferenceId: emptyCylinderDestination === 'VEHICLE' 
+                  ? (vehicleInfo?.vehicle_id || verification.order_id) 
+                  : undefined,
                 quantity: emptyToReturn,
                 cylinderStatus: 'EMPTY',
                 movementType: 'RETURN_EMPTY',
                 referenceTransactionId: verification.exchange_id,
-                notes: `Returned ${emptyToReturn} ${line.cylinder_description} from customer to ${emptyCylinderDestination} via order ${verification.order_id}`
+                notes: `Returned ${emptyToReturn} ${line.cylinder_description} from customer to ${emptyCylinderDestination}${vehicleInfo ? ` (${vehicleInfo.vehicle_number})` : ''} via order ${verification.order_id}`
               })
             );
           }

@@ -408,4 +408,9 @@ export class DeliveryOrderService {
     const repository = await this.ensureRepository();
     await repository.updatePlanStatus(planId, status, updatedBy);
   }
+
+  async getOrderVehicleInfo(orderId: number): Promise<{ vehicle_id: number; vehicle_number: string } | null> {
+    const repository = await this.ensureRepository();
+    return await repository.getOrderVehicleInfo(orderId);
+  }
 }

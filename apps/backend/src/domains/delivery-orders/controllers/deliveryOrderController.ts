@@ -260,4 +260,29 @@ export class DeliveryOrderController {
       });
     }
   }
+
+  async getOrderVehicleInfo(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const vehicleInfo = await this.service.getOrderVehicleInfo(parseInt(id));
+
+      if (!vehicleInfo) {
+        return res.status(404).json({
+          success: false,
+          message: 'Vehicle information not found for this order'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: vehicleInfo
+      });
+    } catch (error) {
+      console.error('Error getting order vehicle info:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
 }

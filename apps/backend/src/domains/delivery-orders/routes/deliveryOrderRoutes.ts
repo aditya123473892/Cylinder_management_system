@@ -12,6 +12,7 @@ router.use(AuthMiddleware.authenticate);
 router.post('/orders', (req, res) => controller.createDeliveryOrder(req, res));
 router.get('/orders', (req, res) => controller.getDeliveryOrders(req, res));
 router.get('/orders/:id', (req, res) => controller.getDeliveryOrderById(req, res));
+router.get('/orders/:id/vehicle', (req, res) => controller.getOrderVehicleInfo(req, res));
 router.put('/orders/:id/status', (req, res) => controller.updateOrderStatus(req, res));
 
 // Delivery Planning Routes

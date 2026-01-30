@@ -361,4 +361,21 @@ export class DeliveryOrderRepository {
         WHERE plan_id = @plan_id
       `);
   }
+
+  async getOrderVehicleInfo(orderId: number): Promise<{ vehicle_id: number; vehicle_number: string } | null> {
+    const request = this.pool.request();
+    request.input('order_id', sql.BigInt, orderId);
+
+    const result = await request.query(`
+      SELECT 
+        dp.vehicle_id,
+        vm.vehicle_number
+      FROM DELIVERY_PLAN_ORDER dpo
+      INNER JOIN DELIVERY_PLAN dp ON dpo.plan_id = dp.plan_id
+      INNER JOIN VEHICLE_MASTER vm ON dp.vehicle_id = vm.vehicle_id
+      WHERE dpo.order_id = @order_id
+    `);
+
+    return result.recordset.length > 0 ? result.recordset[0] : null;
+  }
 }
